@@ -54,7 +54,7 @@ def backward(total_loss, scaler):
 
 
 def train_one_epoch(
-    model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None
+    model, data, loss, epoch, optimizer, scaler, scheduler, averagers, args, tb_writer=None
 ):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
@@ -144,7 +144,8 @@ def train_one_epoch(
                         model.parameters(), args.grad_clip_norm, norm_type=2.0
                     )
             optimizer.step()
-
+        if averagers is not None:
+            averagers.step()
         batch_time_m.update(time.time() - end)
         end = time.time()
         batch_count = i + 1
