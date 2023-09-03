@@ -389,6 +389,12 @@ def parse_args(args):
         help="Log every n steps to tensorboard/console/wandb.",
     )
     parser.add_argument(
+        "--averagers",
+        type=str,
+        default=None,
+        help="Optinoally average checkpoints along the trajectory.",
+    )
+    parser.add_argument(
         "--remote-sync",
         type=str,
         default=None,
@@ -427,12 +433,6 @@ def parse_args(args):
         default=None,
         help='Replace the network linear layers from the bitsandbytes library. '
         'Allows int8 training/inference, etc.'
-    )
-    parser.add_argument(
-        "--rotary-old",
-        action="store_true",
-        default=False,
-        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
     )
     args = parser.parse_args(args)
 
