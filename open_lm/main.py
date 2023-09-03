@@ -48,7 +48,7 @@ from .data import get_data, get_wds_dataset
 from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
 from .params import parse_args
-from .scheduler import cosine_lr
+from .scheduler import cosine_lr, const_lr
 from .train import train_one_epoch, evaluate
 from .file_utils import (
     pt_load,
@@ -58,6 +58,7 @@ from .file_utils import (
     get_string_for_epoch,
 )
 
+from .utils.average_utils import ModelAverager
 
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
 
@@ -89,7 +90,8 @@ def get_latest_checkpoint(path: str, remote: bool):
             for x in result.stdout.decode().split("\n")[:-1]
         ]
     else:
-        checkpoints = glob.glob(path + "**/epoch_*.pt", recursive=True)
+        checkpoints = glob.glob(path + "**/*.pt", recursive=True)
+        checkpoints = [c for c in checkpoints if 'epoch' in c]
     if checkpoints:
         checkpoints = sorted(checkpoints, key=natural_key)
         return checkpoints[-1]
@@ -107,7 +109,7 @@ def get_state_dict(name):
     return sd
 
 
-def load_model(args, model):
+def load_model(args, model, averagers=None):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
         # resuming a train checkpoint w/ epoch and optimizer state
@@ -117,6 +119,12 @@ def load_model(args, model):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         model.load_state_dict(sd)
         logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
+        if args.averagers is not None:
+                logging.info("=> resuming averagers")
+                for k in averagers.avgs_dict:
+                    avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
+                    avg_sd['av_model_sd'] = {f'module.{k}': v for k, v in avg_sd['av_model_sd'].items()}
+                    averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
         model.load_state_dict(checkpoint)
@@ -143,7 +151,7 @@ def load_optimizer(args, model, optimizer, scaler):
         logging.info(f"=> WARNING: not resuming optimizer.")
 
 
-def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss):
+def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
@@ -178,7 +186,13 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
                 checkpoint_dict_opt,
                 os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
             )
-
+        if averagers is not None:
+                logging.info('=> saving averagers')
+                for k in averagers.avgs_dict:
+                    torch.save(
+                        averagers.avgs_dict[k].get_state_dict_avg(),
+                        os.path.join(args.checkpoint_path, f"{k}_{completed_epoch}.pt"),
+                    )
         if args.delete_previous_checkpoint:
             previous_checkpoint = os.path.join(
                 args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt"
@@ -359,11 +373,11 @@ def main(args):
     # optionally resume model from a checkpoint
     start_epoch = 0
     if args.resume is not None:
-        start_epoch = load_model(args, model)
+        start_epoch = load_model(args, model, averagers)
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
-        ep = load_model(args, model)
+        ep = load_model(args, model, averagers)
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
             start_epoch = ep
@@ -460,7 +474,10 @@ def main(args):
     # create optimizer and scaler
     optimizer = None
     scaler = None
+    averagers = None
 
+    if args.averagers is not None:
+        averagers = ModelAverager(model, args.averagers, 1)
     if args.train_data or (args.dataset_metadata is not None):
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
@@ -517,6 +534,15 @@ def main(args):
                 total_steps,
                 args.lr_cooldown_end,
                 args.force_min_lr,
+            )
+        if args.lr_scheduler == "constant":
+            scheduler = const_lr(
+                optimizer,
+                args.lr,
+                args.warmup,
+                # total_steps,
+                # args.lr_cooldown_end,
+                # args.force_min_lr,
             )
         else:
             logging.error(
@@ -587,8 +613,7 @@ def main(args):
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples=num_samples
             )
-        if args.distributed:
-            dist.barrier()
+        dist.barrier()
         train_one_epoch(
             model,
             data,
@@ -597,12 +622,12 @@ def main(args):
             optimizer,
             scaler,
             scheduler,
+            averagers,
             args,
             tb_writer=writer,
         )
         completed_epoch = epoch + 1
-        if args.distributed:
-            dist.barrier()
+        dist.barrier()
 
         evaluation_loss = -1
         if "val" in data:
@@ -613,7 +638,7 @@ def main(args):
         # 613 - 610 at halfway
         # Saving checkpoints.
         save_checkpoint(
-            args, model, optimizer, scaler, completed_epoch, evaluation_loss
+            args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers
         )
 
     if args.wandb and is_master(args):
