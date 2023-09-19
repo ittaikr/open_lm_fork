@@ -1,14 +1,14 @@
 #!/bin/bash -x
 
-#SBATCH --account=cstdl
+#SBATCH --account=transfernetx
 #SBATCH --nodes=2
 #SBATCH --exclude=jwb[0026,0098,0193,0631,0731,0729,0801,0807,0833,0964,1021]
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=12
 # #SBATCH --wait-all-nodes=1
-#SBATCH --time=02:00:00
-#SBATCH --partition=develbooster
+#SBATCH --time=06:00:00
+#SBATCH --partition=booster
 #SBATCH --job-name=openlm
 #SBATCH --output=logs/%x_%j.out
 
@@ -46,36 +46,43 @@ echo "MASTER_ADDR="$MASTER_ADDR
 
 
 OPEN_CLIP_HOME="/p/project/ccstdl/$USER/open_lm_fork"
-# export PYTHONPATH="$PYTHONPATH:${OPEN_CLIP_HOME}"
+export PYTHONPATH="$PYTHONPATH:${OPEN_CLIP_HOME}"
 
 cd ${OPEN_CLIP_HOME}
 
 BATCHSIZE=16
-LR=3e-3
+# LR=3e-3
 MODEL="open_lm_25m"
 WD=0.1
-EPOCHS=64
+# EPOCHS=64
+# SCHED="cosine"
 # NUM_TOKENS = 50000000000
-if [ -n "$EPOCHS_ENV" ]; then
-  EPOCHS=$EPOCHS_ENV
-fi
 
-if [ -n "$LR_ENV" ]; then
-  LR=$LR_ENV
-fi
+# if [ -n "$EPOCHS_ENV" ]; then
+#   EPOCHS=$EPOCHS_ENV
+# fi
+
+# if [ -n "$LR_ENV" ]; then
+#   LR=$LR_ENV
+# fi
+# if [ -n  "$LR_SCHEDULER_ENV" ]; then
+#   SCHED=$LR_SCHEDULER_ENV  
+# fi
 
 # Print the final BATCHSIZE and LR values
-echo "EPOCHS: $EPOCHS"
-echo "LR: $LR"
+# echo "EPOCHS: $EPOCHS_ENV"
+# echo "LR: $LR_ENV"
+# echo "SCHED: $LR_SCHEDULER_ENV"
+EPOCHS=$1
+LR=$2
+LR_SCHEDULER=$3
 
-EXP_NAME="1p5T-bigdata-neox-$MODEL-$BATCHSIZE-$LR-$WD-nodes16-bs$BATCHSIZE-v0"
-
-
+EXP_NAME="1p5T-bigdata-neox-$MODEL-$BATCHSIZE-$LR-$EPOCHS-$LR_SCHEDULER-nodes8-bs$BATCHSIZE-v0"
+WANDB_MODE=offline
 srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main \
     --train-num-samples 400000000 \
     --workers 2 \
-    --train-data "/p/fastdata/mmlaion/lmdata/rpj/shard_{00000000..00099999}.tar" "/p/fastdata/mmlaion/lmdata/not_rpj/shard_{00000000..00024999}.tar" \
-    --train-data-mix-weights 0.725 0.275 \
+    --train-data "/p/fastdata/mmlaion/lmdata/rpj/shard_{00000004..00099999}.tar" \
     --dataset-resampled \
     --precision amp_bfloat16 \
     --batch-size $BATCHSIZE \
@@ -90,10 +97,12 @@ srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main
     --epochs $EPOCHS \
     --report-to wandb \
     --name $EXP_NAME \
-    --logs /p/scratch/ccstdl/porian1/exps/lmtest \
+    --logs /p/scratch/ccstdl/porian1/exps/lm_grid \
     --resume latest \
     --data-key 'json' \
     --lr-cooldown-end 3e-5 \
     --qk-norm \
     --accum-freq 1 \
+    --lr-scheduler $LR_SCHEDULER \
+    --wandb-project-name 'open-lm-grid' \
     --averagers poly_8_1,poly_16_1 
