@@ -123,7 +123,7 @@ def load_model(args, model, averagers=None):
                 logging.info("=> resuming averagers")
                 for k in averagers.avgs_dict:
                     avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
-                    avg_sd['av_model_sd'] = {f'module.{k}': v for k, v in avg_sd['av_model_sd'].items()}
+                    # avg_sd['av_model_sd'] = {f'module.{k}': v for k, v in avg_sd['av_model_sd'].items()}
                     averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
@@ -353,7 +353,10 @@ def main(args):
     if args.train_num_samples is not None:
         args.train_num_samples //= args.seq_len
     model = model.to(device)
+    averagers = None
 
+    if args.averagers is not None:
+        averagers = ModelAverager(model, args.averagers, 1)
     random_seed(args.seed, args.rank)
 
     if args.grad_checkpointing:
@@ -474,10 +477,7 @@ def main(args):
     # create optimizer and scaler
     optimizer = None
     scaler = None
-    averagers = None
-
-    if args.averagers is not None:
-        averagers = ModelAverager(model, args.averagers, 1)
+    
     if args.train_data or (args.dataset_metadata is not None):
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
@@ -535,7 +535,7 @@ def main(args):
                 args.lr_cooldown_end,
                 args.force_min_lr,
             )
-        if args.lr_scheduler == "constant":
+        elif args.lr_scheduler == "const":
             scheduler = const_lr(
                 optimizer,
                 args.lr,
@@ -557,6 +557,8 @@ def main(args):
         assert tensorboard is not None, "Please install tensorboard."
         writer = tensorboard.SummaryWriter(args.tensorboard_path)
     if args.wandb and is_master(args):
+        os.environ["WANDB_MODE"]="offline"
+
         assert wandb is not None, "Please install wandb."
         logging.debug("Starting wandb.")
         if args.val_data is not None:
@@ -576,11 +578,16 @@ def main(args):
 
     if "train" not in data:
         checkpoint_root = Path(args.resume).parent
-
+        if averagers is not None:
+            k = next(iter(averagers.avgs_dict.keys()))
+            logging.info(f'=> evaluation avg {k}')
+            model = averagers.avgs_dict[k].av_model
+            
         metrics = evaluate(model, data, start_epoch, args, writer)
         metrics["checkpoint_path"] = args.resume
         metrics["val_data"] = args.val_data
         metrics["model"] = args.model
+        metrics["average"] = k if averagers is not None else 'none'
 
         if is_master(args):
             with open(os.path.join(checkpoint_root, "results.jsonl"), "a+") as f:

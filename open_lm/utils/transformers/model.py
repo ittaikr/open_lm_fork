@@ -15,6 +15,7 @@ def create_model(cfg):
         vocab_size=cfg.vocab_size,
         post_embed_norm=cfg.post_embed_norm,
         weight_tying=cfg.weight_tying,
+        apply_qk_norm=cfg.qk_norm,
     )
     model = Transformer(model_args)
 

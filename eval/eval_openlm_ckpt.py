@@ -101,8 +101,10 @@ def main():
     print("Loading model into the right classes")
     open_lm = OpenLMforCausalLM(OpenLMConfig(**model_cfg))
     tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-
-    state_dict = checkpoint["state_dict"]
+    if 'av_model_sd' in checkpoint.keys():
+        state_dict = checkpoint["av_model_sd"]
+    else:
+        state_dict = checkpoint["state_dict"]
     state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}
     open_lm.model.load_state_dict(state_dict)
 
