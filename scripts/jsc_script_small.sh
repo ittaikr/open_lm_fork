@@ -38,7 +38,8 @@ export NCCL_ASYNC_ERROR_HANDLING=1
 export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
 
 export MASTER_PORT=12802
-
+### get the first node name as master address - customized for vgg slurm
+### e.g. master(gnodee[2-5],gnoded1) == gnodee2
 master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export MASTER_ADDR=$master_addr"i"
 echo "MASTER_ADDR="$MASTER_ADDR
@@ -52,12 +53,31 @@ cd ${OPEN_CLIP_HOME}
 BATCHSIZE=16
 # LR=3e-3
 MODEL="open_lm_25m"
-WD=$1
-EPOCHS=$2
-LR=$3
-LR_SCHEDULER=$4
+WD=0.1
+# EPOCHS=64
+# SCHED="cosine"
+# NUM_TOKENS = 50000000000
 
-EXP_NAME="1p5T-bigdata-neox-$MODEL-$BATCHSIZE-$LR-$EPOCHS-$LR_SCHEDULER-nodes8-bs$BATCHSIZE-wd$WD-v0"
+# if [ -n "$EPOCHS_ENV" ]; then
+#   EPOCHS=$EPOCHS_ENV
+# fi
+
+# if [ -n "$LR_ENV" ]; then
+#   LR=$LR_ENV
+# fi
+# if [ -n  "$LR_SCHEDULER_ENV" ]; then
+#   SCHED=$LR_SCHEDULER_ENV  
+# fi
+
+# Print the final BATCHSIZE and LR values
+# echo "EPOCHS: $EPOCHS_ENV"
+# echo "LR: $LR_ENV"
+# echo "SCHED: $LR_SCHEDULER_ENV"
+EPOCHS=$1
+LR=$2
+LR_SCHEDULER=$3
+
+EXP_NAME="1p5T-bigdata-neox-$MODEL-$BATCHSIZE-$LR-$EPOCHS-$LR_SCHEDULER-nodes8-bs$BATCHSIZE-v0"
 WANDB_MODE=offline
 srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main \
     --train-num-samples 400000000 \
@@ -77,12 +97,12 @@ srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main
     --epochs $EPOCHS \
     --report-to wandb \
     --name $EXP_NAME \
-    --logs /p/scratch/ccstdl/porian1/exps/lm_grid_wd \
-    --resume latest \
+    --logs /p/scratch/ccstdl/porian1/exps/lm_grid \
+    --resume /p/home/jusers/porian1/juwels/porian1/open_lm_fork/exps/lm_grid/1p5T-bigdata-neox-open_lm_25m-16-3e-3-32-cosine-nodes8-bs16-v0/checkpoints/epoch_24.pt \
     --data-key 'json' \
     --lr-cooldown-end 3e-5 \
     --qk-norm \
     --accum-freq 1 \
     --lr-scheduler $LR_SCHEDULER \
-    --wandb-project-name 'open-lm-grid-wd' \
-    --averagers poly_16_1,poly_32_1
+    --wandb-project-name 'open-lm-grid' \
+    --averagers poly_8_1,poly_16_1 
