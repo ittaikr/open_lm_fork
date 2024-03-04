@@ -1,0 +1,6 @@
+exps/lm_grid_160/1p5T-bigdata-neox-open_lm_160m-16-3e-4-64-const-nodes8-bs16-wd5e-2-v0/checkpoints/val_epoch_1.pt
+exps/lm_grid_160/1p5T-bigdata-neox-open_lm_160m-16-3e-4-64-const-nodes8-bs16-wd2e-1-v0/checkpoints/val_epoch_28.pt
+exps/lm_grid_160/1p5T-bigdata-neox-open_lm_160m-16-75e-5-64-const-nodes8-bs16-wd1e-1-v0/checkpoints/val_epoch_16.pt
+exps/lm_grid_160/1p5T-bigdata-neox-open_lm_160m-16-75e-5-64-const-nodes8-bs16-wd5e-2-v0/checkpoints/val_epoch_24.pt
+exps/lm_grid_160/1p5T-bigdata-neox-open_lm_160m-16-3e-3-64-const-nodes8-bs16-wd1e-1-v0/checkpoints/val_epoch_3.pt
+exps/lm_grid_160/1p5T-bigdata-neox-open_lm_160m-16-3e-3-64-const-nodes8-bs16-wd25e-3-v0/checkpoints/val_epoch_9.pt

@@ -1,7 +1,7 @@
 #!/bin/bash -x
 
 #SBATCH --account=transfernetx
-#SBATCH --nodes=2
+#SBATCH --nodes=4
 #SBATCH --exclude=jwb[0026,0098,0193,0631,0731,0729,0801,0807,0833,0964,1021]
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=4

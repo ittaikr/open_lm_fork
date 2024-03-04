@@ -49,7 +49,44 @@ export PYTHONPATH="$PYTHONPATH:${OPEN_CLIP_HOME}"
 
 cd ${OPEN_CLIP_HOME}
 
-LOGS="/p/scratch/ccstdl/porian1/$3"
+BATCHSIZE=16
+# LR=3e-3
+MODEL="open_lm_160m"
+WD=$1
+EPOCHS=$2
+LR=$3
+LR_SCHEDULER=$4
 
+EXP_NAME="1p5T-bigdata-neox-$MODEL-$BATCHSIZE-$LR-$EPOCHS-$LR_SCHEDULER-nodes8-bs$BATCHSIZE-wd$WD-v1"
 WANDB_MODE=offline
-srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main --name "$2" --logs $LOGS --train-data "/p/fastdata/mmlaion/lmdata/rpj/shard_{00000004..00099999}.tar" --config $1 
+srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main \
+    --train-num-samples 1000000000 \
+    --workers 2 \
+    --train-data "/p/fastdata/mmlaion/lmdata/rpj/shard_{00000004..00099999}.tar" \
+    --dataset-resampled \
+    --precision amp_bfloat16 \
+    --batch-size $BATCHSIZE \
+    --grad-checkpointing \
+    --log-every-n-steps 20 \
+    --grad-clip-norm 1 \
+    --lr $LR \
+    --warmup 2000 \
+    --model $MODEL \
+    --wd $WD \
+    --beta2 0.95 \
+    --epochs $EPOCHS \
+    --report-to wandb \
+    --name $EXP_NAME \
+    --logs /p/scratch/ccstdl/porian1/exps/lm_grid_wd_again_160_zloss \
+    --resume latest \
+    --data-key 'json' \
+    --lr-cooldown-end 3e-5 \
+    --qk-norm \
+    --accum-freq 1 \
+    --lr-scheduler $LR_SCHEDULER \
+    --wandb-project-name 'open-lm-grid-wd' \
+    --averagers poly_64_1,poly_64_100 \
+    --eps 1e-8 \
+    --beta1 0.9 \
+    --beta2 0.95 \
+    --z-loss-coefficient 0.0001

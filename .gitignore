@@ -133,6 +133,6 @@ dmypy.json
 wandb
 logs*
 *.out
-eval/*.jsonl
+eval/*.jsonl*
 weights*
 out*

@@ -11,8 +11,8 @@ import numpy as np
 from functools import partial
 from pathlib import Path
 import json
-
 import torch
+from torch.autograd import profiler
 from torch import optim
 from torch.cuda.amp import GradScaler
 
@@ -111,24 +111,24 @@ def get_state_dict(name):
 
 def load_model(args, model, averagers=None):
     checkpoint = pt_load(args.resume, map_location="cpu")
-    if "epoch" in checkpoint:
-        # resuming a train checkpoint w/ epoch and optimizer state
-        start_epoch = checkpoint["epoch"]
-        sd = checkpoint["state_dict"]
-        if next(iter(sd.items()))[0].startswith("module"):
-            sd = {k[len("module.") :]: v for k, v in sd.items()}
-        model.load_state_dict(sd)
-        logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
-        if args.averagers is not None:
-                logging.info("=> resuming averagers")
+    with profiler.profile(profile_memory=True, use_cuda=True) as prof:
+        if "epoch" in checkpoint:
+            # resuming a train checkpoint w/ epoch and optimizer state
+            start_epoch = checkpoint["epoch"]
+            sd = checkpoint["state_dict"]
+            if next(iter(sd.items()))[0].startswith("module"):
+                sd = {k[len("module.") :]: v for k, v in sd.items()}
+            model.load_state_dict(sd)
+            logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
+            if args.averagers is not None:
                 for k in averagers.avgs_dict:
-                    avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
-                    # avg_sd['av_model_sd'] = {f'module.{k}': v for k, v in avg_sd['av_model_sd'].items()}
-                    averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
-    else:
-        # loading a bare (model only) checkpoint for fine-tune or evaluation
-        model.load_state_dict(checkpoint)
-        logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
+                    logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
+                    averagers.avgs_dict[k].load_state_dict_avg(torch.load(args.resume.replace('epoch', k), map_location='cpu'))
+        else:
+            # loading a bare (model only) checkpoint for fine-tune or evaluation
+            model.load_state_dict(checkpoint)
+            logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
+    print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
     return start_epoch
 
 
@@ -208,7 +208,7 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
 
 def main(args):
     args = parse_args(args)
-
+        
     if torch.cuda.is_available():
         # This enables tf32 on Ampere GPUs which is only 8% slower than
         # float16 and almost as accurate as float32
@@ -219,7 +219,7 @@ def main(args):
 
     # fully initialize distributed device environment
     device = init_distributed_device(args)
-
+    
     # get the name of the experiments
     if args.name is None:
         # sanitize model name for filesystem / uri use, easier if we don't use / in name as a rule?
@@ -356,7 +356,7 @@ def main(args):
     averagers = None
 
     if args.averagers is not None:
-        averagers = ModelAverager(model, args.averagers, 1)
+        averagers = ModelAverager(model, args.averagers)
     random_seed(args.seed, args.rank)
 
     if args.grad_checkpointing:
@@ -553,9 +553,12 @@ def main(args):
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
     args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args)
     writer = None
+    csv_path = None
     if args.save_logs and args.tensorboard:
         assert tensorboard is not None, "Please install tensorboard."
         writer = tensorboard.SummaryWriter(args.tensorboard_path)
+    if args.save_logs and args.csv_log:
+        csv_path = os.path.join(args.logs, args.name, "summary.csv")
     if args.wandb and is_master(args):
         os.environ["WANDB_MODE"]="offline"
 
@@ -632,6 +635,7 @@ def main(args):
             averagers,
             args,
             tb_writer=writer,
+            csv_path=csv_path,
         )
         completed_epoch = epoch + 1
         dist.barrier()

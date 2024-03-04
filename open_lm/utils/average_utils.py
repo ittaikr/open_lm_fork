@@ -12,7 +12,7 @@ def unwrap_model(model):
 
 
 class ModelAverager(object):
-    def __init__(self, model, methods: str, total_steps: int):
+    def __init__(self, model, methods: str):
         # self.t = 1
         self.model = model
         self.avgs_dict = {}
@@ -20,8 +20,8 @@ class ModelAverager(object):
             args = method.split('f')
             method_name = args[0][:-1]  if args[0].endswith('_') else args[0]
             freq = int(args[1]) if len(args) > 1 else 1
-            T = total_steps // freq # T is the total numner of steps
-            self.avgs_dict[method] = Averager(model, method_name, freq, T)
+            # T = total_steps // freq # T is the total numner of steps
+            self.avgs_dict[method] = Averager(model, method_name, freq)
 
     def step(self):
         for avg in self.avgs_dict.values():
@@ -29,10 +29,10 @@ class ModelAverager(object):
 
 
 class Averager(object):
-    def __init__(self, model, method, freq, T):
+    def __init__(self, model, method, freq):
         self.model = model
         self.method = method
-        self.T = T
+        # self.T = T
         self.update_counter = 1
         self.step_counter = 1
         self.freq = freq
@@ -45,10 +45,11 @@ class Averager(object):
             self.av_model = deepcopy(model)
         if method == 'poly':
             self.eta = 0.0 if not args else float(args[0])
+            self.freq = 1 if (len(args) < 2 or not args) else int(args[1])
         elif method == 'ema':
             self.gamma = 0.99 if not args else float(args[0])
-        elif method == 'suffix':
-            self.suffix_steps = self.T -int(self.T/float(args[0])) if args else 0 # alpha is 1/args[0]
+        # elif method == 'suffix':
+        #     self.suffix_steps = self.T -int(self.T/float(args[0])) if args else 0 # alpha is 1/args[0]
             # comment out log/sqrt freq for now
             # if sub_sample == 'log':
             #     self.freq = int((self.T - self.suffix_steps) / np.log(self.T - self.suffix_steps))
@@ -60,9 +61,9 @@ class Averager(object):
             #     self.freq = 0
         elif method == 'cosine':
             pass
-        elif method == 'degree':
-            self.power = float(args[0])
-            self.start = int((1 - 1/float(args[1]))*self.T) if len(args) > 1 else 0
+        # elif method == 'degree':
+        #     self.power = float(args[0])
+        #     self.start = int((1 - 1/float(args[1]))*self.T) if len(args) > 1 else 0
         else:
             print(f'Unknown averaging method {method}')
 
@@ -99,28 +100,28 @@ class Averager(object):
                     model_sd[k], alpha=(self.eta + 1) / (self.eta + t)
                 )
                 
-            elif method == 'suffix':
-                # the update rule is: new_average = average of the last suffix_steps steps
-                if t > self.suffix_steps:
-                    iterates_to_avg = t-self.suffix_steps
-                    if self.freq > 0:
-                        iterates_to_avg = int(iterates_to_avg / self.freq)
-                    av_sd[k].mul_(
-                        1-1/(iterates_to_avg)
-                        ).add_(
-                        model_sd[k], alpha=1/(iterates_to_avg)
-                        )
-            elif method == 'cosine':
-                # the weight of the t iteration is 0.5(cos(pi*(t-1)/T) + cos(pi*t/T))))))
-                av_sd[k].add_(model_sd[k], 
-                alpha=0.5*(np.cos(np.pi * (t-1) / self.T) -  np.cos(np.pi * t / self.T))
-                )
-            elif method == 'degree':
-                # the weitght of the t iteration is ((T - t + 1) / (T - start)) ** (power) - ((T - t) / (T - start)) ** (power) if t >= start else 1
-                if t >= self.start:
-                    av_sd[k].add_(model_sd[k], 
-                    alpha=((self.T - (t-1)) / (self.T )) ** (self.power) - ((self.T - t) / (self.T)) ** (self.power) 
-                    )
+            # elif method == 'suffix':
+            #     # the update rule is: new_average = average of the last suffix_steps steps
+            #     if t > self.suffix_steps:
+            #         iterates_to_avg = t-self.suffix_steps
+            #         if self.freq > 0:
+            #             iterates_to_avg = int(iterates_to_avg / self.freq)
+            #         av_sd[k].mul_(
+            #             1-1/(iterates_to_avg)
+            #             ).add_(
+            #             model_sd[k], alpha=1/(iterates_to_avg)
+            #             )
+            # elif method == 'cosine':
+            #     # the weight of the t iteration is 0.5(cos(pi*(t-1)/T) + cos(pi*t/T))))))
+            #     av_sd[k].add_(model_sd[k], 
+            #     alpha=0.5*(np.cos(np.pi * (t-1) / self.T) -  np.cos(np.pi * t / self.T))
+            #     )
+            # elif method == 'degree':
+            #     # the weitght of the t iteration is ((T - t + 1) / (T - start)) ** (power) - ((T - t) / (T - start)) ** (power) if t >= start else 1
+            #     if t >= self.start:
+            #         av_sd[k].add_(model_sd[k], 
+            #         alpha=((self.T - (t-1)) / (self.T )) ** (self.power) - ((self.T - t) / (self.T)) ** (self.power) 
+            #         )
         self.step_counter += 1
         
 
@@ -137,7 +138,7 @@ class Averager(object):
         'freq': self.freq, 
         # 'av_model': self.av_model,
         'av_model_sd': unwrap_model(self.av_model).state_dict(), # unwrap model to get the state dict
-        'T': self.T,
+        # 'T': self.T if hasattr(self, 'T') else None,
         'method': self.method,
         'eta': self.eta if hasattr(self, 'eta') else None,
         'gamma': self.gamma if hasattr(self, 'gamma') else None,
@@ -153,8 +154,8 @@ class Averager(object):
         self.freq = state_dict['freq']
         self.method = state_dict['method']
         self.av_model.load_state_dict(state_dict['av_model_sd'])
-        if hasattr(self, 'T'):
-            self.T = state_dict['T']
+        # if hasattr(self, 'T'):
+        #     self.T = state_dict['T']
         if hasattr(self, 'eta'):
             self.eta = state_dict['eta']
         if hasattr(self, 'gamma'):

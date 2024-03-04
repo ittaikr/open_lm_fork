@@ -18,9 +18,9 @@ cd ${OPEN_CLIP_HOME}
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 folder=$1
-etype="open_lm_25m"
+etype="open_lm_160m"
 
-for i in `ls -t /p/home/jusers/porian1/juwels/porian1/open_lm_fork/exps/lm_grid_wd/$folder/checkpoints/epoch*.pt`
+for i in `ls -t /p/home/jusers/porian1/juwels/porian1/open_lm_fork/exps/lm_grid_160_cosine_grid/$folder/checkpoints/epoch*.pt`
     do
     save_path="$(dirname $i)/val_$(basename $i)"
 
@@ -29,7 +29,7 @@ for i in `ls -t /p/home/jusers/porian1/juwels/porian1/open_lm_fork/exps/lm_grid_
     if [[ $folder == *"v1"* ]]; then
         AVG_VALUES=("none" "poly_32_1" "poly_64_1")
     else
-        AVG_VALUES=("none" "poly_32_1" "poly_16_1")
+        AVG_VALUES=("none" "poly_32_1" "poly_64_1")
     fi
 
     if [ -f "$save_path" ]; then
@@ -37,6 +37,7 @@ for i in `ls -t /p/home/jusers/porian1/juwels/porian1/open_lm_fork/exps/lm_grid_
     elif [[ $save_path == *"latest"* ]]; then
         echo "pass on latest"
     else
+    
         for AVG in "${AVG_VALUES[@]}"; do
             if [ "$AVG" == "none" ]; then
                 echo "$AVG"
@@ -51,7 +52,7 @@ for i in `ls -t /p/home/jusers/porian1/juwels/porian1/open_lm_fork/exps/lm_grid_
                     --model $etype \
                     --fsdp --fsdp-amp \
                     --data-key json \
-                    --train-num-samples 400000000 \
+                    --train-num-samples 1000000000 \
                     --name $RANDOM \
                     --resume "$i" \
                     --data-key 'json' \
@@ -71,7 +72,7 @@ for i in `ls -t /p/home/jusers/porian1/juwels/porian1/open_lm_fork/exps/lm_grid_
                     --model $etype \
                     --fsdp --fsdp-amp \
                     --data-key json \
-                    --train-num-samples 400000000 \
+                    --train-num-samples 1000000000 \
                     --name $RANDOM \
                     --resume "$i" \
                     --data-key 'json' \
