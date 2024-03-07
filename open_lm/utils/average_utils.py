@@ -66,6 +66,11 @@ class Averager(object):
         #     self.start = int((1 - 1/float(args[1]))*self.T) if len(args) > 1 else 0
         else:
             print(f'Unknown averaging method {method}')
+        av_sd = self.av_model.state_dict()
+        first_k_av_sd = list(av_sd.keys())[0]
+        if first_k_av_sd.startswith("module"):
+            for k in av_sd.keys():
+                av_sd[k[len("module."):]] = av_sd.pop(k)
 
     def step(self):
         if self.update_counter != self.freq:
@@ -89,7 +94,14 @@ class Averager(object):
         if self.method == 'cosine' or self.method == 'degree':
             pass
             # model_place_holder_sd = self.model_place_holder.state_dict()
+        first_k_av_sd = list(av_sd.keys())[0]
+        # if first_k_av_sd.startswith("module"):
+        #     av_sd = {k[len("module."):]: v for k, v in av_sd.items()}
         for k in model_sd.keys():
+            # print("k: ", k)
+            # # print the first key of av_sd
+            # print("av_sd_first_key: ", list(av_sd.keys())[0])
+
             if isinstance(av_sd[k], (torch.LongTensor, torch.cuda.LongTensor)):  
                 # these are buffers that store how many batches batch norm has seen so far
                 av_sd[k].copy_(model_sd[k])
@@ -137,7 +149,7 @@ class Averager(object):
         'step_counter': self.step_counter, 
         'freq': self.freq, 
         # 'av_model': self.av_model,
-        'av_model_sd': unwrap_model(self.av_model).state_dict(), # unwrap model to get the state dict
+        'av_model_sd': self.av_model.state_dict(),
         # 'T': self.T if hasattr(self, 'T') else None,
         'method': self.method,
         'eta': self.eta if hasattr(self, 'eta') else None,

@@ -2,6 +2,7 @@ import glob
 import logging
 import os
 import re
+import gc
 import subprocess
 import sys
 import random
@@ -116,14 +117,21 @@ def load_model(args, model, averagers=None):
             # resuming a train checkpoint w/ epoch and optimizer state
             start_epoch = checkpoint["epoch"]
             sd = checkpoint["state_dict"]
-            if next(iter(sd.items()))[0].startswith("module"):
-                sd = {k[len("module.") :]: v for k, v in sd.items()}
+            # if next(iter(sd.items()))[0].startswith("module"):
+            #     print("erase module. from keys in state_dict")
+            #     sd = {k[len("module.") :]: v for k, v in sd.items()}
             model.load_state_dict(sd)
             logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
             if args.averagers is not None:
                 for k in averagers.avgs_dict:
+                    avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
+                    # if next(iter(avg_sd.items()))[0].startswith("module"):
+                    #     print("erase module. from keys in averager {}".format(k))
+                    #     avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
+                    averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
+                    del avg_sd
+                    gc.collect()
                     logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
-                    averagers.avgs_dict[k].load_state_dict_avg(torch.load(args.resume.replace('epoch', k), map_location='cpu'))
         else:
             # loading a bare (model only) checkpoint for fine-tune or evaluation
             model.load_state_dict(checkpoint)
@@ -187,12 +195,12 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
                 os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
             )
         if averagers is not None:
-                logging.info('=> saving averagers')
-                for k in averagers.avgs_dict:
-                    torch.save(
-                        averagers.avgs_dict[k].get_state_dict_avg(),
-                        os.path.join(args.checkpoint_path, f"{k}_{completed_epoch}.pt"),
-                    )
+            for k in averagers.avgs_dict:
+                logging.info('=> saving averager for {}'.format(k))
+                torch.save(
+                    averagers.avgs_dict[k].get_state_dict_avg(),
+                    os.path.join(args.checkpoint_path, f"{k}_{completed_epoch}.pt"),
+                )
         if args.delete_previous_checkpoint:
             previous_checkpoint = os.path.join(
                 args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt"
@@ -352,13 +360,13 @@ def main(args):
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
         args.train_num_samples //= args.seq_len
-    model = model.to(device)
+    
     averagers = None
-
+    model = model.to(device)
     if args.averagers is not None:
         averagers = ModelAverager(model, args.averagers)
     random_seed(args.seed, args.rank)
-
+    
     if args.grad_checkpointing:
         model.set_grad_checkpointing()
 
@@ -473,6 +481,11 @@ def main(args):
             model = torch.nn.parallel.DistributedDataParallel(
                 model, device_ids=[device], **ddp_args
             )
+            if averagers is not None:
+                for k in averagers.avgs_dict:
+                    averagers.avgs_dict[k].av_model = torch.nn.parallel.DistributedDataParallel(
+                        averagers.avgs_dict[k].av_model, device_ids=[device], **ddp_args
+                    )
 
     # create optimizer and scaler
     optimizer = None
@@ -515,6 +528,10 @@ def main(args):
     if args.torchcompile:
         logging.info("Compiling model...")
         model = torch.compile(model)
+        if averagers is not None:
+            logging.info("Compiling averagers...")
+            for k in averagers.avgs_dict:
+                averagers.avgs_dict[k].av_model = torch.compile(averagers.avgs_dict[k].av_model)
 
     # create scheduler if train
     scheduler = None
