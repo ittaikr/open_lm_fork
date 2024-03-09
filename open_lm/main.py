@@ -117,12 +117,12 @@ def load_model(args, model, averagers=None):
             # resuming a train checkpoint w/ epoch and optimizer state
             start_epoch = checkpoint["epoch"]
             sd = checkpoint["state_dict"]
-            # if next(iter(sd.items()))[0].startswith("module"):
-            #     print("erase module. from keys in state_dict")
-            #     sd = {k[len("module.") :]: v for k, v in sd.items()}
+            if next(iter(sd.items()))[0].startswith("module"):
+                print("erase module. from keys in state_dict")
+                sd = {k[len("module.") :]: v for k, v in sd.items()}
             model.load_state_dict(sd)
             logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
-            if args.averagers is not None:
+            if averagers is not None:
                 for k in averagers.avgs_dict:
                     avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
                     # if next(iter(avg_sd.items()))[0].startswith("module"):
@@ -139,6 +139,24 @@ def load_model(args, model, averagers=None):
     print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
     return start_epoch
 
+def load_avg_models(args, averagers, device):
+    checkpoint = pt_load(args.resume, map_location="cpu")
+    if "epoch" in checkpoint:
+        # resuming a train checkpoint w/ epoch and optimizer state
+        start_epoch = checkpoint["epoch"]
+        if averagers is not None:
+            for k in averagers.avgs_dict:
+                avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
+                if next(iter(avg_sd.items()))[0].startswith("module"):
+                    print("erase module. from keys in state_dict")
+                    avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
+                averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
+                del avg_sd
+                gc.collect()
+                logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
+                if args.distributed:
+                    averagers.avgs_dict[k].av_model = torch.nn.DataParallel(averagers.avgs_dict[k].av_model, device_ids=[device])
+    return
 
 def load_optimizer(args, model, optimizer, scaler):
     potential_checkpoint = args.resume.replace("epoch_", "optimizer_")
@@ -363,8 +381,7 @@ def main(args):
     
     averagers = None
     model = model.to(device)
-    if args.averagers is not None:
-        averagers = ModelAverager(model, args.averagers)
+
     random_seed(args.seed, args.rank)
     
     if args.grad_checkpointing:
@@ -490,6 +507,11 @@ def main(args):
     # create optimizer and scaler
     optimizer = None
     scaler = None
+    if args.averagers is not None:
+        averagers = ModelAverager(model, args.averagers, device, args.resume is not None)
+
+    if args.resume is not None:
+        load_avg_models(args, averagers, device=device)
     
     if args.train_data or (args.dataset_metadata is not None):
         named_parameters = list(model.named_parameters())

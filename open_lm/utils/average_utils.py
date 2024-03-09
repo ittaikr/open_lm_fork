@@ -12,7 +12,7 @@ def unwrap_model(model):
 
 
 class ModelAverager(object):
-    def __init__(self, model, methods: str):
+    def __init__(self, model, methods: str, device: torch.device, resume=False):
         # self.t = 1
         self.model = model
         self.avgs_dict = {}
@@ -21,7 +21,7 @@ class ModelAverager(object):
             method_name = args[0][:-1]  if args[0].endswith('_') else args[0]
             freq = int(args[1]) if len(args) > 1 else 1
             # T = total_steps // freq # T is the total numner of steps
-            self.avgs_dict[method] = Averager(model, method_name, freq)
+            self.avgs_dict[method] = Averager(model, method_name, freq, device, resume=resume)
 
     def step(self):
         for avg in self.avgs_dict.values():
@@ -29,7 +29,7 @@ class ModelAverager(object):
 
 
 class Averager(object):
-    def __init__(self, model, method, freq):
+    def __init__(self, model, method, freq, device, resume=False):
         self.model = model
         self.method = method
         # self.T = T
@@ -42,7 +42,13 @@ class Averager(object):
             self.av_model = model
             return
         else:
-            self.av_model = deepcopy(model)
+            # self.av_model = deepcopy(model)
+            # as model is wrapped by DataParallel, we will initialize av_model as DataParallel as well
+            if resume:
+                self.av_model = deepcopy(unwrap_model(model))
+            else:
+                self.av_model = torch.nn.DataParallel(deepcopy(unwrap_model(model)), device_ids=[device])
+
         if method == 'poly':
             self.eta = 0.0 if not args else float(args[0])
             self.freq = 1 if (len(args) < 2 or not args) else int(args[1])
@@ -66,11 +72,11 @@ class Averager(object):
         #     self.start = int((1 - 1/float(args[1]))*self.T) if len(args) > 1 else 0
         else:
             print(f'Unknown averaging method {method}')
-        av_sd = self.av_model.state_dict()
-        first_k_av_sd = list(av_sd.keys())[0]
-        if first_k_av_sd.startswith("module"):
-            for k in av_sd.keys():
-                av_sd[k[len("module."):]] = av_sd.pop(k)
+        # av_sd = self.av_model.state_dict()
+        # first_k_av_sd = list(av_sd.keys())[0]
+        # if first_k_av_sd.startswith("module"):
+        #     for k in av_sd.keys():
+        #         av_sd[k[len("module."):]] = av_sd.pop(k)
 
     def step(self):
         if self.update_counter != self.freq:
@@ -101,14 +107,18 @@ class Averager(object):
             # print("k: ", k)
             # # print the first key of av_sd
             # print("av_sd_first_key: ", list(av_sd.keys())[0])
-
-            if isinstance(av_sd[k], (torch.LongTensor, torch.cuda.LongTensor)):  
+            av_sd_k = k
+            # print("k is: ", k)
+            # print("first_k_av_sd is: ", first_k_av_sd)
+            if k.startswith("module") and not first_k_av_sd.startswith("module"):
+                av_sd_k = k[len("module."):]
+            if isinstance(av_sd[av_sd_k], (torch.LongTensor, torch.cuda.LongTensor)):  
                 # these are buffers that store how many batches batch norm has seen so far
-                av_sd[k].copy_(model_sd[k])
+                av_sd[av_sd_k].copy_(model_sd[k])
                 continue
             if method == 'poly':
                 # the update rule is: new_average = (1 - (eta + 1) / (eta + t)) * old_average + (eta + 1) / (eta + t) * current_model which is eq(10) in https://arxiv.org/pdf/1212.1824.pdf
-                av_sd[k].mul_(1 - ((self.eta + 1) / (self.eta + t))).add_(
+                av_sd[av_sd_k].mul_(1 - ((self.eta + 1) / (self.eta + t))).add_(
                     model_sd[k], alpha=(self.eta + 1) / (self.eta + t)
                 )
                 
@@ -149,7 +159,7 @@ class Averager(object):
         'step_counter': self.step_counter, 
         'freq': self.freq, 
         # 'av_model': self.av_model,
-        'av_model_sd': self.av_model.state_dict(),
+        'av_model_sd': unwrap_model(self.av_model).state_dict(),
         # 'T': self.T if hasattr(self, 'T') else None,
         'method': self.method,
         'eta': self.eta if hasattr(self, 'eta') else None,
