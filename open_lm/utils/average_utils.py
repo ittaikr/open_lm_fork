@@ -121,6 +121,11 @@ class Averager(object):
                 av_sd[av_sd_k].mul_(1 - ((self.eta + 1) / (self.eta + t))).add_(
                     model_sd[k], alpha=(self.eta + 1) / (self.eta + t)
                 )
+            if method == 'ema':
+                # the update rule is: new_average = (1 - gamma) * old_average + gamma * current_model
+                av_sd[av_sd_k].mul_(self.gamma).add_(
+                    model_sd[k], alpha=1 - self.gamma
+                )
                 
             # elif method == 'suffix':
             #     # the update rule is: new_average = average of the last suffix_steps steps
