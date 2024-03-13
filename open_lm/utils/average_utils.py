@@ -42,11 +42,7 @@ class Averager(object):
             self.av_model = model
             return
         else:
-            # self.av_model = deepcopy(model)
-            # as model is wrapped by DataParallel, we will initialize av_model as DataParallel as well
             self.av_model = deepcopy(unwrap_model(model))
-            # else:
-            #     self.av_model = torch.nn.DataParallel(deepcopy(unwrap_model(model)), device_ids=[device])
 
         if method == 'poly':
             self.eta = 0.0 if not args else float(args[0])
@@ -100,17 +96,9 @@ class Averager(object):
         av_sd = self.av_model.state_dict()
         if self.method == 'cosine' or self.method == 'degree':
             pass
-            # model_place_holder_sd = self.model_place_holder.state_dict()
         first_k_av_sd = list(av_sd.keys())[0]
-        # if first_k_av_sd.startswith("module"):
-        #     av_sd = {k[len("module."):]: v for k, v in av_sd.items()}
         for k in model_sd.keys():
-            # print("k: ", k)
-            # # print the first key of av_sd
-            # print("av_sd_first_key: ", list(av_sd.keys())[0])
             av_sd_k = k
-            # print("k is: ", k)
-            # print("first_k_av_sd is: ", first_k_av_sd)
             if k.startswith("module") and not first_k_av_sd.startswith("module"):
                 av_sd_k = k[len("module."):]
             if isinstance(av_sd[av_sd_k], (torch.LongTensor, torch.cuda.LongTensor)):  
