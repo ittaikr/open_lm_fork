@@ -113,7 +113,7 @@ def train_one_epoch(
                             # save the loss for the average model for logging
                             total_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
             
-        else:
+        else: #TODO fix like acc==1
             # split up batch into accum_freq chunks -- if you have --batch-size 8 and --accum-freq 4
             # then you only process 2 items at a time. batch-size must be divisible by accume-freq.
             assert (
@@ -213,9 +213,9 @@ def train_one_epoch(
 
             # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
             log_data = {
-                "loss": losses_m.val,
-                "data_time": data_time_m.val,
-                "batch_time": batch_time_m.val,
+                "loss": losses_m.avg,
+                "data_time": data_time_m.avg,
+                "batch_time": batch_time_m.avg,
                 "samples_per_second": samples_per_second,
                 "samples_per_second_per_gpu": samples_per_second_per_gpu,
                 "lr": optimizer.param_groups[0]["lr"],
@@ -224,7 +224,7 @@ def train_one_epoch(
             if averagers is not None and args.log_avg_model_training_loss:
                 for k in averagers.avgs_dict:
                     if averagers is not None and args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch):
-                        log_data[k + "_loss"] = losses_avg_m[k].val
+                        log_data[k + "_loss"] = losses_avg_m[k].avg
             if args.log_logit_mean:
                 log_data["logit_mean"] = logit_m.val
 
@@ -252,6 +252,12 @@ def train_one_epoch(
             # resetting batch / data time meters per log window
             batch_time_m.reset()
             data_time_m.reset()
+            # reset all average meters
+            losses_m.reset()
+            if averagers is not none:
+                for k in averagers.avgs_dict():
+                    losses_avg_m.reset()
+        
     # end for
 
 
