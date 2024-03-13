@@ -12,7 +12,7 @@ def unwrap_model(model):
 
 
 class ModelAverager(object):
-    def __init__(self, model, methods: str, device: torch.device, resume=False):
+    def __init__(self, model, methods: str, device: torch.device):
         # self.t = 1
         self.model = model
         self.avgs_dict = {}
@@ -21,7 +21,7 @@ class ModelAverager(object):
             method_name = args[0][:-1]  if args[0].endswith('_') else args[0]
             freq = int(args[1]) if len(args) > 1 else 1
             # T = total_steps // freq # T is the total numner of steps
-            self.avgs_dict[method] = Averager(model, method_name, freq, device, resume=resume)
+            self.avgs_dict[method] = Averager(model, method_name, freq, device)
 
     def step(self):
         for avg in self.avgs_dict.values():
@@ -29,7 +29,7 @@ class ModelAverager(object):
 
 
 class Averager(object):
-    def __init__(self, model, method, freq, device, resume=False):
+    def __init__(self, model, method, freq, device):
         self.model = model
         self.method = method
         # self.T = T
@@ -44,10 +44,9 @@ class Averager(object):
         else:
             # self.av_model = deepcopy(model)
             # as model is wrapped by DataParallel, we will initialize av_model as DataParallel as well
-            if resume:
-                self.av_model = deepcopy(unwrap_model(model))
-            else:
-                self.av_model = torch.nn.DataParallel(deepcopy(unwrap_model(model)), device_ids=[device])
+            self.av_model = deepcopy(unwrap_model(model))
+            # else:
+            #     self.av_model = torch.nn.DataParallel(deepcopy(unwrap_model(model)), device_ids=[device])
 
         if method == 'poly':
             self.eta = 0.0 if not args else float(args[0])
@@ -80,8 +79,10 @@ class Averager(object):
 
     def step(self):
         if self.update_counter != self.freq:
+            # print("passing, update_counter: ", self.update_counter, "freq: ", self.freq, "method: ", self.method)
             pass
         else:
+            # print("updating, update_counter: ", self.update_counter, "freq: ", self.freq, "method: ", self.method)
             self.update()
         self.update_counter += 1
         if self.update_counter > self.freq:

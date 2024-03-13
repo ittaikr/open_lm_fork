@@ -6,10 +6,13 @@ import os
 import time
 import csv
 from collections import OrderedDict
+import torch.distributed as dist
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.nn.parallel.distributed import DistributedDataParallel
+from torch.distributed.distributed_c10d import ReduceOp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.autograd import profiler
 
@@ -95,24 +98,20 @@ def train_one_epoch(
 
         if args.accum_freq == 1:
             with autocast():
-                # with profiler.profile(profile_memory=True, use_cuda=True) as prof:
                 inputs = texts[:, : args.seq_len - 1]
                 targets = texts[:, 1 : args.seq_len]
                 out, _ = model(inputs)
-                # print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
-                total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
-                    
-                if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))                
+            backward(total_loss, scaler)
+            if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                with autocast():
                     for key, averager in averagers.avgs_dict.items():
                         with torch.no_grad():
                             out_avg, _ = averager.av_model(inputs)
-                            # save the loss for the average model for logging on cpu
+                            # save the loss for the average model for logging
                             total_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
-                        # averager.av_model.cpu()
-                
-            backward(total_loss, scaler)
             
         else:
             # split up batch into accum_freq chunks -- if you have --batch-size 8 and --accum-freq 4
@@ -136,14 +135,13 @@ def train_one_epoch(
                         loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
                         / args.accum_freq
                     )
-                    # calc avergers loss every args.log_avg_model_training_loss steps
+                backward(local_loss, scaler)
+                with autocast():
                     if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                         for key, averager in averagers.avgs_dict.items():
                             with torch.no_grad():
                                 out_avg, _ = averager.av_model(inputs_ii).item()
                                 local_avg_losses[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1)) / args.accum_freq
-                            # averager.av_model.cpu()
-                backward(local_loss, scaler)
                 if ii == 0:
                     total_loss = local_loss
                     if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
@@ -177,82 +175,78 @@ def train_one_epoch(
         batch_time_m.update(time.time() - end)
         end = time.time()
         batch_count = i + 1
-        samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
-        samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
-        if i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch:
+        # create a copy of the loss tensor to avoid modifying the original
+        global_loss_tensor = total_loss.detach().clone()
+        if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+            # same for the average model loss
+            for key, value in total_loss_avg.items():
+                total_loss_avg[key] = value.detach().clone()
+        if args.world_size > 1:
+            # all_reduce the copied loss tensor
+            dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
+            if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                for key, value in total_loss_avg.items():
+                    dist.all_reduce(value, op=ReduceOp.AVG)
+        if is_master(args):
+            batch_size = len(inputs)
+            # update the loss meter with the global loss tensor every iteration
+            losses_m.update(global_loss_tensor.item(), batch_size)
+            if args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                for key, value in total_loss_avg.items():
+                    losses_avg_m[key].update(value.item(), batch_size)
+
+        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
             samples_per_epoch = dataloader.num_samples
             percent_complete = 100.0 * batch_count / num_batches_per_epoch
 
-            # Aggregate loss across all processes
-            gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
-            torch.distributed.all_gather(gathered_loss, total_loss)
-            avg_loss = sum(gathered_loss).item() / args.world_size
-            losses_m.update(avg_loss, batch_size * args.world_size)
-            
-            gathered_loss_avg = {}
-            if averagers is not None and args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch):
-                for key in total_loss_avg.keys():
-                    gathered_loss_avg[key] = [torch.zeros_like(total_loss_avg[key]) for _ in range(args.world_size)]
-                    torch.distributed.all_gather(gathered_loss_avg[key], total_loss_avg[key])
-                    avg_loss_avg = sum(gathered_loss_avg[key]).item() / args.world_size
-                    losses_avg_m[key].update(avg_loss_avg, batch_size * args.world_size)
+            samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
+            samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
+            logging.info(
+                f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
+                f"Loss: {losses_m.avg:.3f} "
+                f"Data (t): {data_time_m.avg:.3f} "
+                f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
+                f"LR: {optimizer.param_groups[0]['lr']:5f} "
+            )
 
-            # Ensure averagers and other metrics are similarly aggregated
-            # Example for samples_per_second (assuming it needs to be aggregated)
-            # Use all_reduce for in-place aggregation
-            sps_tensor = torch.tensor(samples_per_second).to(total_loss.device)
-            torch.distributed.all_reduce(sps_tensor, op=torch.distributed.ReduceOp.SUM)
-            samples_per_second = sps_tensor.item() / args.world_size 
-            sps_gpu_tensor = torch.tensor(samples_per_second_per_gpu).to(device)
-            torch.distributed.all_reduce(sps_gpu_tensor, op=torch.distributed.ReduceOp.SUM)
-            samples_per_second_per_gpu_avg = sps_gpu_tensor.item() / args.world_size
-            if is_master(args):
-                logging.info(
-                    f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
-                    f"Loss: {losses_m.avg:.3f} "
-                    f"Data (t): {data_time_m.avg:.3f} "
-                    f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu_avg:#g}/s/gpu "
-                    f"LR: {optimizer.param_groups[0]['lr']:5f} "
-                )
+            # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
+            log_data = {
+                "loss": losses_m.val,
+                "data_time": data_time_m.val,
+                "batch_time": batch_time_m.val,
+                "samples_per_second": samples_per_second,
+                "samples_per_second_per_gpu": samples_per_second_per_gpu,
+                "lr": optimizer.param_groups[0]["lr"],
+                "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+            }
+            if averagers is not None and args.log_avg_model_training_loss:
+                for k in averagers.avgs_dict:
+                    if averagers is not None and args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch):
+                        log_data[k + "_loss"] = losses_avg_m[k].val
+            if args.log_logit_mean:
+                log_data["logit_mean"] = logit_m.val
 
-                # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
-                log_data = {
-                    "loss": losses_m.val,
-                    "data_time": data_time_m.val,
-                    "batch_time": batch_time_m.val,
-                    "samples_per_second": samples_per_second,
-                    "samples_per_second_per_gpu": samples_per_second_per_gpu,
-                    "lr": optimizer.param_groups[0]["lr"],
-                    "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
-                }
-                if averagers is not None and args.log_avg_model_training_loss:
-                    for k in averagers.avgs_dict:
-                        if averagers is not None and args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch):
-                            log_data[k + "_loss"] = losses_avg_m[k].val
-                if args.log_logit_mean:
-                    log_data["logit_mean"] = logit_m.val
-
-                for name, val in log_data.items():
-                    name = "train/" + name
-                    if tb_writer is not None:
-                        tb_writer.add_scalar(name, val, step)
-                    if args.wandb:
-                        assert wandb is not None, "Please install wandb."
-                        wandb.log({name: val, "step": step, "tokens": log_data["tokens"]})
-                if csv_path is not None:
-                    # if the file does not exist, (which is the case for the first iteration) we need to write the header
-                    rowd = OrderedDict(epoch=epoch, step=step)
-                    rowd.update([("train/" + k, v) for k, v in log_data.items()])
-                    if not os.path.exists(csv_path):
-                        with open(csv_path, "w") as f:
-                            dict_writer = csv.DictWriter(f, fieldnames=rowd.keys())
-                            dict_writer.writeheader()
-                    # delete all rows with epoch <= current epoch
-                    with open(csv_path, "a") as f:
+            for name, val in log_data.items():
+                name = "train/" + name
+                if tb_writer is not None:
+                    tb_writer.add_scalar(name, val, step)
+                if args.wandb:
+                    assert wandb is not None, "Please install wandb."
+                    wandb.log({name: val, "step": step, "tokens": log_data["tokens"]})
+            if csv_path is not None:
+                # if the file does not exist, (which is the case for the first iteration) we need to write the header
+                rowd = OrderedDict(epoch=epoch, step=step)
+                rowd.update([("train/" + k, v) for k, v in log_data.items()])
+                if not os.path.exists(csv_path):
+                    with open(csv_path, "w") as f:
                         dict_writer = csv.DictWriter(f, fieldnames=rowd.keys())
-                        dict_writer.writerow(rowd)
+                        dict_writer.writeheader()
+                # delete all rows with epoch <= current epoch
+                with open(csv_path, "a") as f:
+                    dict_writer = csv.DictWriter(f, fieldnames=rowd.keys())
+                    dict_writer.writerow(rowd)
 
 
             # resetting batch / data time meters per log window

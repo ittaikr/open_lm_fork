@@ -154,8 +154,8 @@ def load_avg_models(args, averagers, device):
                 del avg_sd
                 gc.collect()
                 logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
-                if args.distributed:
-                    averagers.avgs_dict[k].av_model = torch.nn.DataParallel(averagers.avgs_dict[k].av_model, device_ids=[device])
+                # if args.distributed:
+                #     averagers.avgs_dict[k].av_model = torch.nn.DataParallel(averagers.avgs_dict[k].av_model, device_ids=[device])
     return
 
 def load_optimizer(args, model, optimizer, scaler):
@@ -498,17 +498,17 @@ def main(args):
             model = torch.nn.parallel.DistributedDataParallel(
                 model, device_ids=[device], **ddp_args
             )
-            if averagers is not None:
-                for k in averagers.avgs_dict:
-                    averagers.avgs_dict[k].av_model = torch.nn.parallel.DistributedDataParallel(
-                        averagers.avgs_dict[k].av_model, device_ids=[device], **ddp_args
-                    )
+            # if averagers is not None:
+            #     for k in averagers.avgs_dict:
+            #         averagers.avgs_dict[k].av_model = torch.nn.parallel.DistributedDataParallel(
+            #             averagers.avgs_dict[k].av_model, device_ids=[device], **ddp_args
+            #         )
 
     # create optimizer and scaler
     optimizer = None
     scaler = None
     if args.averagers is not None:
-        averagers = ModelAverager(model, args.averagers, device, args.resume is not None)
+        averagers = ModelAverager(model, args.averagers, device)
 
     if args.resume is not None:
         load_avg_models(args, averagers, device=device)
