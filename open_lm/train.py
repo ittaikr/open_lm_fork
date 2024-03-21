@@ -113,9 +113,7 @@ def train_one_epoch(
                             # save the loss for the average model for logging
                             total_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
             
-        else: #TODO fix like acc==1
-            # split up batch into accum_freq chunks -- if you have --batch-size 8 and --accum-freq 4
-            # then you only process 2 items at a time. batch-size must be divisible by accume-freq.
+        else:
             assert (
                 args.batch_size % args.accum_freq == 0
             ), "Batch size must be divisible by accum_freq"
@@ -191,7 +189,7 @@ def train_one_epoch(
             batch_size = len(inputs)
             # update the loss meter with the global loss tensor every iteration
             losses_m.update(global_loss_tensor.item(), batch_size)
-            if args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+            if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                 for key, value in total_loss_avg.items():
                     losses_avg_m[key].update(value.item(), batch_size)
 
@@ -254,12 +252,11 @@ def train_one_epoch(
             data_time_m.reset()
             # reset all average meters
             losses_m.reset()
-            if averagers is not none:
+            if averagers is not None:
                 for k in averagers.avgs_dict():
                     losses_avg_m.reset()
         
     # end for
-
 
 def evaluate(model, data, start_epoch, args, writer):
     """
