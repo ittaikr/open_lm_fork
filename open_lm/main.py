@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import gc
+import yaml
 import subprocess
 import sys
 import random
@@ -220,10 +221,19 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
                     os.path.join(args.checkpoint_path, f"{k}_{completed_epoch}.pt"),
                 )
         if args.delete_previous_checkpoint:
+            keeping_flag = True
+            if args.keep_powers_of_two > 0:
+                to_keep = completed_epoch - 1
+                if to_keep == 0:
+                    keeping_flag = True
+                elif np.log2(to_keep)==int(np.log2(to_keep)) and to_keep * 2**args.keep_powers_of_two > args.epochs:
+                    # don't delete the checkpoint in that case, but do delete the optimizer
+                    keeping_flag = False
+
             previous_checkpoint = os.path.join(
                 args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt"
             )
-            if os.path.exists(previous_checkpoint):
+            if os.path.exists(previous_checkpoint) and keeping_flag:
                 os.remove(previous_checkpoint)
             previous_checkpoint = os.path.join(
                 args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt"
@@ -397,6 +407,10 @@ def main(args):
                 val = getattr(args, name)
                 logging.info(f"  {name}: {val}")
                 f.write(f"{name}: {val}\n")
+        # log into an args.yaml file
+        with open(os.path.join(args.logs, args.name, "args.yaml"), "w") as f:
+            yaml.dump(vars(args), f, default_flow_style=False)
+
 
     # optionally resume model from a checkpoint
     start_epoch = 0
