@@ -136,3 +136,6 @@ logs*
 eval/*.jsonl*
 weights*
 out*
+open_lm/model_configs/*.json
+jobs/*.yaml
+scripts/*.sh
