@@ -55,12 +55,23 @@ def expand_tuple_keys(dict_with_tuples):
             dict_with_tuples.update(dict(zip(kk, vv)))
         return expand_tuple_keys(dict_with_tuples)
 
+def get_slurm_script(num_nodes, num_gpus):
+    if num_nodes > 4 and num_nodes != 8 and num_nodes != 6:
+        raise ValueError('Only up to 4 nodes are supported (except for 8 nodes)')
+    if num_nodes > 1:
+        sbatch_file = f"scripts/jsc_script_{num_nodes}_nodes.sh"
+        print(f"Using {sbatch_file} for {num_nodes} nodes")
+        return sbatch_file
+        # for example if num_nodes = 2, then the script is "scripts/jsc_script_2_nodes.sh"
+    else:
+        return f"scripts/jsc_script_{num_gpus}_gpus.sh" if num_gpus > 1 else "scripts/jsc_script_1_gpu.sh"
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('jobfile', type=str,
                         help='path to YAML file containing job configuration')
-    parser.add_argument('-s', '--script', type=str, help='name of script to provide to sbatch commands')
+    parser.add_argument('-s', '--script',default="", type=str, help='name of script to provide to sbatch commands')
     parser.add_argument('-y', '--yes', action='store_true', help='confirm submission without viewing grid details first')
     parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite existing results directory')
     parser.add_argument('-d', '--dry_run', action='store_true',
@@ -86,6 +97,11 @@ if __name__ == '__main__':
 
         job_details = job_description['job_details']
         output_dir = job_details['output_dir']
+        num_nodes = job_details['num_nodes']
+        if 'num_gpus' in job_details or 'num_nodes' in job_details:
+            num_gpus = job_details['num_gpus']
+            num_nodes = job_details['num_nodes']
+            args.script = get_slurm_script(num_nodes, num_gpus)
         batch_name = datetime.datetime.now().strftime('%y-%m-%d') + '-' + job_details['name']
         batch_dir = os.path.join(output_dir, batch_name)
     else:
