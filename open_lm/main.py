@@ -708,6 +708,11 @@ def main(args):
     if args.wandb and is_master(args):
         wandb.finish()
 
+    # write a 'done' file to indicate that the experiment is done.
+    if args.save_logs:
+        with open(os.path.join(args.logs, args.name, "done"), "w") as f:
+            f.write("done")
+
     # run a final sync.
     if remote_sync_process is not None:
         logging.info("Final remote sync.")
