@@ -4,7 +4,7 @@ import logging
 import math
 import os
 import time
-import csv
+from csv import DictWriter
 from collections import OrderedDict
 import torch.distributed as dist
 
@@ -138,8 +138,8 @@ def train_one_epoch(
                     if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                         for key, averager in averagers.avgs_dict.items():
                             with torch.no_grad():
-                                out_avg, _ = averager.av_model(inputs_ii).item()
-                                local_avg_losses[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1)) / args.accum_freq
+                                out_avg, _ = averager.av_model(inputs_ii)
+                                local_avg_losses[key] = loss(out_avg.reshape(-1, args.vocab_size), targets_ii.reshape(-1)) / args.accum_freq
                 if ii == 0:
                     total_loss = local_loss
                     if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
@@ -220,7 +220,7 @@ def train_one_epoch(
                 "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
             }
             if averagers is not None and args.log_avg_model_training_loss:
-                for k in averagers.avgs_dict:
+                for k in averagers.avgs_dict.keys():
                     if averagers is not None and args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch):
                         log_data[k + "_loss"] = losses_avg_m[k].avg
             if args.log_logit_mean:
@@ -239,11 +239,11 @@ def train_one_epoch(
                 rowd.update([("train/" + k, v) for k, v in log_data.items()])
                 if not os.path.exists(csv_path):
                     with open(csv_path, "w") as f:
-                        dict_writer = csv.DictWriter(f, fieldnames=rowd.keys())
+                        dict_writer = DictWriter(f, fieldnames=rowd.keys())
                         dict_writer.writeheader()
                 # delete all rows with epoch <= current epoch
                 with open(csv_path, "a") as f:
-                    dict_writer = csv.DictWriter(f, fieldnames=rowd.keys())
+                    dict_writer = DictWriter(f, fieldnames=rowd.keys())
                     dict_writer.writerow(rowd)
 
 
@@ -253,8 +253,8 @@ def train_one_epoch(
             # reset all average meters
             losses_m.reset()
             if averagers is not None:
-                for k in averagers.avgs_dict():
-                    losses_avg_m.reset()
+                for k in averagers.avgs_dict.keys():
+                    losses_avg_m[k].reset()
         
     # end for
 
