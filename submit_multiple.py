@@ -97,7 +97,7 @@ if __name__ == '__main__':
 
         job_details = job_description['job_details']
         output_dir = job_details['output_dir']
-        num_nodes = job_details['num_nodes']
+        # num_nodes = job_details['num_nodes']
         if 'num_gpus' in job_details or 'num_nodes' in job_details:
             num_gpus = job_details['num_gpus']
             num_nodes = job_details['num_nodes']
