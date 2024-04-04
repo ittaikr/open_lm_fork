@@ -50,7 +50,7 @@ from .data import get_data, get_wds_dataset
 from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
 from .params import parse_args
-from .scheduler import cosine_lr, const_lr
+from .scheduler import cosine_lr, const_lr, const_lr_cooldown, hybrid_cosine_rsqrt, hybrid_cosine_rsqrt_cooldown
 from .train import train_one_epoch, evaluate
 from .file_utils import (
     pt_load,
@@ -229,12 +229,23 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
                 elif np.log2(to_keep)==int(np.log2(to_keep)) and to_keep * 2**args.keep_powers_of_two > args.epochs:
                     # don't delete the checkpoint in that case, but do delete the optimizer
                     keeping_flag = False
-
+            if args.keep_freq != 0 and completed_epoch % args.keep_freq == 0:
+                keeping_flag = False
+            if args.keep_from != 0 and completed_epoch < args.keep_from:
+                keeping_flag = True
+            
             previous_checkpoint = os.path.join(
                 args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt"
             )
             if os.path.exists(previous_checkpoint) and keeping_flag:
                 os.remove(previous_checkpoint)
+                if averagers is not None:
+                    for k in averagers.avgs_dict:
+                        previous_checkpoint = os.path.join(
+                            args.checkpoint_path, f"{k}_{completed_epoch - 1}.pt"
+                        )
+                        if os.path.exists(previous_checkpoint):
+                            os.remove(previous_checkpoint)
             previous_checkpoint = os.path.join(
                 args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt"
             )
@@ -578,6 +589,7 @@ def main(args):
             )
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
+            cooldown_steps = (data["train"].dataloader.num_batches) * args.epochs_cooldown if args.epochs_cooldown is not None else None
 
         if args.lr_scheduler == "cosine":
             scheduler = cosine_lr(
@@ -588,18 +600,43 @@ def main(args):
                 args.lr_cooldown_end,
                 args.force_min_lr,
             )
+        elif args.lr_scheduler == "hybrid":
+            scheduler = hybrid_cosine_rsqrt(
+                optimizer,
+                args.lr,
+                args.warmup,
+                total_steps,
+                args.force_min_lr,
+            )
+        elif args.lr_scheduler == "hybrid-cooldown":
+            scheduler = hybrid_cosine_rsqrt_cooldown(
+                optimizer,
+                args.lr,
+                args.warmup,
+                total_steps,
+                args.force_min_lr,
+                cooldown_steps,
+            )
         elif args.lr_scheduler == "const":
             scheduler = const_lr(
                 optimizer,
                 args.lr,
                 args.warmup,
                 # total_steps,
-                # args.lr_cooldown_end,
-                # args.force_min_lr,
+                # cooldown_steps,
+            )
+        elif args.lr_scheduler == "const-cooldown":
+            # optimizer, base_lr, warmup_length, steps, cooldown_steps, cooldown_power=1.0, cooldown_end_lr=0.
+            scheduler = const_lr_cooldown(
+                optimizer,
+                args.lr,
+                args.warmup,
+                total_steps,
+                cooldown_steps,
             )
         else:
             logging.error(
-                f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
+                f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown, hybrid, hybrid-cooldown"
             )
             exit(1)
 
@@ -676,7 +713,8 @@ def main(args):
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples=num_samples
             )
-        dist.barrier()
+        if args.world_size > 1:
+            dist.barrier()
         train_one_epoch(
             model,
             data,
@@ -691,7 +729,8 @@ def main(args):
             csv_path=csv_path,
         )
         completed_epoch = epoch + 1
-        dist.barrier()
+        if args.world_size > 1:
+            dist.barrier()
 
         evaluation_loss = -1
         if "val" in data:
