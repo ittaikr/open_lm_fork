@@ -9,7 +9,7 @@ parameters:
       #   lr_scheduler: ['cosine', 'const-cooldown', 'hybrid-cooldown']
         # epochs_cooldown: [5]
       - train_num_samples: [400000000] # ~400M, so *100 = 40B tokens
-        lr_scheduler: ['const', 'hybrid']
+        lr_scheduler: ['const']
         epochs_cooldown: [5]
       # - train_num_samples: [385000000] # ~385M, so *100 = 38.5B tokens
       #   lr_scheduler: ['const-cooldown', 'hybrid-cooldown']
