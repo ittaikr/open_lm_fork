@@ -163,6 +163,8 @@ def parse_args(args):
     )
     parser.add_argument("--save-frequency", type=int, default=1, help="How often to save checkpoints.")
     parser.add_argument("--keep-powers-of-two", type=int, default=0, help="With delete previous checkpoints, keep only checkpoints that are powers of 2.")
+    parser.add_argument("--keep-freq", type=int, default=0, help="With delete previous checkpoints, keep only checkpoints that are multiples of this number.")
+    parser.add_argument("--keep-from", type=int, default=0, help="With delete previous checkpoints, keep only checkpoints that are greater than this number.")
     parser.add_argument("--save-most-recent",
         action="store_true",
         default=False,
