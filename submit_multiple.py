@@ -56,8 +56,8 @@ def expand_tuple_keys(dict_with_tuples):
         return expand_tuple_keys(dict_with_tuples)
 
 def get_slurm_script(num_nodes, num_gpus):
-    if num_nodes > 4 and num_nodes != 8 and num_nodes != 6:
-        raise ValueError('Only up to 4 nodes are supported (except for 8 nodes)')
+    if num_nodes not in [1, 2, 4, 8]:
+        raise ValueError('Only 1, 2, 4, or 8 nodes are supported for now.')
     if num_nodes > 1:
         sbatch_file = f"scripts/jsc_script_{num_nodes}_nodes.sh"
         print(f"Using {sbatch_file} for {num_nodes} nodes")
@@ -81,6 +81,7 @@ if __name__ == '__main__':
                              'to the results folder of a previous execution of the script.')
     parser.add_argument('-c', '--chunk_size', type=int, default=1, help='number of jobs to submit at once')
     parser.add_argument('-n', '--num_configs',default=0, type=int, help='running limited number of configorations, for dealing with overwrite mistakes')
+    parser.add_argument('-q', '--queue', type=int, default=1, help='number of jobs to submit at once')
     parser.add_argument('-a', '--autorestart',action='store_true', help='use autorestart.py script on jsc')
 
     args = parser.parse_args()
@@ -97,7 +98,7 @@ if __name__ == '__main__':
 
         job_details = job_description['job_details']
         output_dir = job_details['output_dir']
-        num_nodes = job_details['num_nodes']
+        # num_nodes = job_details['num_nodes']
         if 'num_gpus' in job_details or 'num_nodes' in job_details:
             num_gpus = job_details['num_gpus']
             num_nodes = job_details['num_nodes']
@@ -202,10 +203,6 @@ if __name__ == '__main__':
         out_path = os.path.join(out_dir, '%j.out')
         # print("Running command: ", f'sbatch --job-name={spec_name} --output={out_path} --error={out_path} {args.script} {specs}')
         cmd = f'sbatch --job-name={spec_name} --output={out_path} --error={out_path} {args.script} {specs} {spec_name} {batch_dir}'
-        # if args.autorestart:
-        #     template_str = '{job_id}.out'
-        #     cmd = f'python autorestart.py "sbatch --job-name={spec_name} --output={out_path} --error={out_path} {args.script} {specs}" --path_to_folder={out_path} --output-file-template="{template_str}" --check-interval-secs=900 --verbose'
-        #     cmd = f'screen -dm bash -c "{cmd}"'
         if args.dry_run:
             # print(f'Would now run "{cmd}"')
             if args.rerun:
@@ -215,18 +212,32 @@ if __name__ == '__main__':
         else:
             while True:
                 try:
-                    sbatch_output = subprocess.run(cmd, shell=True, check=True)
+                    for i in range(args.queue):
+                        if i == 0:
+                            sbatch_output = subprocess.run(cmd, shell=True, check=True)
+                            if args.queue > 1:
+                                sleep(1)
+                        else:
+                            if i == 1:
+                                cmd_get_job_id = f"squeue --name={spec_name} -h -o %i"
+                            else:
+                                cmd_get_job_id = f"squeue --name={spec_name}_{i-1} -h -o %i --start"
+                            job_id = subprocess.check_output(cmd_get_job_id, shell=True).decode().strip()
+                            sleep(1)
+                            cmd_submit = f"sbatch --dependency=afterany:{job_id} --job-name={spec_name}_{i} --output={out_path} --error={out_path} {args.script} {specs} {spec_name} {batch_dir}"
+                            subprocess.run(cmd_submit, shell=True, check=True)
+                            sleep(1)
                     break
                 except subprocess.CalledProcessError:
                     print('Encountered called process error while submitting, waiting and trying again')
-                    sleep(4 + float(np.random.rand(1) * 5))
+                    sleep(2 + float(np.random.rand(1) * 5))
         count += 1
         if count % 500 == 0 and not args.dry_run and not count==7500:
             print(f'\nStarted {count} jobs\n')
             sleep(120 + float(np.random.rand(1) * 5))
         # if count==7500:
         #     break
-    print(f'\nStarted {count} jobs in total')
+    print(f'\nStarted {count*args.queue} jobs in total')
 
 
 
