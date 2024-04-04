@@ -676,8 +676,7 @@ def main(args):
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples=num_samples
             )
-        if args.world_size > 1:
-            dist.barrier()
+        dist.barrier()
         train_one_epoch(
             model,
             data,
@@ -692,8 +691,7 @@ def main(args):
             csv_path=csv_path,
         )
         completed_epoch = epoch + 1
-        if args.world_size > 1:
-            dist.barrier()
+        dist.barrier()
 
         evaluation_loss = -1
         if "val" in data:

@@ -377,12 +377,12 @@ def parse_args(args):
     )
     parser.add_argument("--csv-log",
         action="store_true",
-        default=True,
+        default=False,
         help="Whether to log to a csv file."
     )
     parser.add_argument("--log-avg-model-training-loss",
         type=int,
-        default=20,
+        default=0,
         help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps."
     )
     # log_avg_model_training_loss

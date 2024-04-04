@@ -90,6 +90,7 @@ def train_one_epoch(
         step = num_batches_per_epoch * epoch + i
         if not args.skip_scheduler:
             scheduler(step)
+
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
         data_time_m.update(time.time() - end)
