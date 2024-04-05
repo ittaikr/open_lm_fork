@@ -50,7 +50,7 @@ from .data import get_data, get_wds_dataset
 from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
 from .params import parse_args
-from .scheduler import cosine_lr, const_lr, const_lr_cooldown, hybrid_cosine_rsqrt, hybrid_cosine_rsqrt_cooldown
+from .scheduler import cosine_lr, const_lr, const_lr_cooldown, hybrid_cosine_rsqrt, hybrid_cosine_rsqrt_cooldown, cosine_rewarmed_lr
 from .train import train_one_epoch, evaluate
 from .file_utils import (
     pt_load,
@@ -607,6 +607,16 @@ def main(args):
                 args.warmup,
                 total_steps,
                 args.force_min_lr,
+            )
+        elif args.lr_scheduler == "cosine-rewarmed":
+            scheduler = cosine_rewarmed_lr(
+                optimizer,
+                args.lr,
+                args.warmup,
+                total_steps,
+                args.force_min_lr,
+                args.cosine_rewarmed_target_steps,
+                args.cosine_rewarmed_original_warmup,
             )
         elif args.lr_scheduler == "hybrid-cooldown":
             scheduler = hybrid_cosine_rsqrt_cooldown(

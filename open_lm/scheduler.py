@@ -9,6 +9,15 @@ def assign_learning_rate(optimizer, new_lr):
 def _warmup_lr(base_lr, warmup_length, step):
     return base_lr * (step + 1) / warmup_length
 
+def _cosine_lr(step, base_lr, warmup_length, steps, min_lr, force_min_lr):
+    if step < warmup_length:
+        lr = _warmup_lr(base_lr, warmup_length, step)
+    else:
+        e = step - warmup_length
+        es = steps - warmup_length
+        lr = min_lr + 0.5 * (1 + np.cos(np.pi * e / es)) * (base_lr - min_lr)
+        lr = max(lr, force_min_lr)
+    return lr
 
 def const_lr(optimizer, base_lr, warmup_length):
     def _lr_adjuster(step):
@@ -53,18 +62,17 @@ def cosine_lr(optimizer, base_lr, warmup_length, steps, min_lr, force_min_lr):
         return lr
     return _lr_adjuster
 
-def cosine_lr_cycled(optimizer, base_lr, warmup_length, steps, min_lr, force_min_lr):
+def cosine_rewarmed_lr(optimizer, base_lr, warmup_length, steps, min_lr, force_min_lr, target_steps, original_warmup):
     def _lr_adjuster(step):
+        new_base_lr = _cosine_lr(target_steps - steps + warmup_length, base_lr, original_warmup, target_steps, min_lr, force_min_lr)
         if step < warmup_length:
-            lr = _warmup_lr(base_lr, warmup_length, step)
+            lr = _warmup_lr(new_base_lr, warmup_length, step)
         else:
-            e = step - warmup_length
-            es = steps - warmup_length
-            lr = min_lr + 0.5 * (1 + np.cos(np.pi * e / es)) * (base_lr - min_lr)
-            lr = max(lr, force_min_lr)
+            lr = _cosine_lr(target_steps - steps + step - warmup_length, base_lr, warmup_length, target_steps - warmup_length, min_lr, force_min_lr)
         assign_learning_rate(optimizer, lr)
         return lr
     return _lr_adjuster
+
 
 def hybrid_cosine_rsqrt(optimizer, base_lr, warmup_length, steps, min_lr, d = 2.0):
     def _lr_adjuster(step):

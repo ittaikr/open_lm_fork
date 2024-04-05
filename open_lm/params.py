@@ -152,6 +152,16 @@ def parse_args(args):
         default='cosine',
         help="LR scheduler. One of: 'cosine', 'const' (constant), 'const-cooldown' (constant w/ cooldown). Default: cosine",
     )
+    parser.add_argument("--cosine-rewarmed-target-steps",
+        type=int,
+        default=None,
+        help="for cosine rewarmed, the target steps for the cosine schedule. Default: cosine",
+    )
+    parser.add_argument("--cosine-rewarmed-original-warmup",
+        type=int,
+        default=1000,
+        help="for cosine rewarmed, the original warmup steps. Default: 1000",
+    )
     parser.add_argument("--lr-cooldown-end", type=float, default=0.0,
         help="End learning rate for cooldown schedule. Default: 0"
     )

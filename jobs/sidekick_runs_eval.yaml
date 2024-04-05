@@ -28,5 +28,7 @@ parameters:
       'exps/24-04-03-sidekick_runs_debug/015_24-04-03-sidekick_runs_debug+lr=0.00424+tra_num_sam=300000000+lr_sch=cosine/checkpoints/epoch_100.pt'
       ]
     data_key: ['json']
+    qk_norm: [true]
     workers: [2]
     averagers: ['poly_64_1']
+    train_num_samples: [400000000]
