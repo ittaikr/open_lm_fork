@@ -62,6 +62,8 @@ from .file_utils import (
 
 from .utils.average_utils import ModelAverager
 
+import schedulefree
+
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
 
 
@@ -542,20 +544,36 @@ def main(args):
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
-
-        optimizer = optim.AdamW(
-            [
-                {"params": no_decay_params, "weight_decay": 0.0},
-                {"params": params, "weight_decay": args.wd},
-            ],
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            eps=args.eps,
-        )
-        scaler = None
-        if args.precision == "amp":
-            assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
-            scaler = GradScaler()
+        if args.schedulefree:
+            optimizer = schedulefree.AdamWScheduleFree(
+                [
+                    {"params": no_decay_params, "weight_decay": 0.0},
+                    {"params": params, "weight_decay": args.wd},
+                ],
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                eps=args.eps,
+                warmup_steps=args.warmup,
+                weight_lr_power=0, #???
+            )
+            scaler = None
+            if args.precision == "amp":
+                assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
+                scaler = GradScaler()
+        else:
+            optimizer = optim.AdamW(
+                [
+                    {"params": no_decay_params, "weight_decay": 0.0},
+                    {"params": params, "weight_decay": args.wd},
+                ],
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                eps=args.eps,
+            )
+            scaler = None
+            if args.precision == "amp":
+                assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
+                scaler = GradScaler()
 
     # optionally resume optimizer from a checkpoint
     if args.resume is not None:
@@ -590,8 +608,9 @@ def main(args):
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
             cooldown_steps = (data["train"].dataloader.num_batches) * args.epochs_cooldown if args.epochs_cooldown is not None else None
-
-        if args.lr_scheduler == "cosine":
+        if args.schedulefree: # schedulefree, so no scheduler
+            pass
+        elif args.lr_scheduler == "cosine":
             scheduler = cosine_lr(
                 optimizer,
                 args.lr,
@@ -614,6 +633,7 @@ def main(args):
                 args.lr,
                 args.warmup,
                 total_steps,
+                args.lr_cooldown_end,
                 args.force_min_lr,
                 args.cosine_rewarmed_target_steps,
                 args.cosine_rewarmed_original_warmup,

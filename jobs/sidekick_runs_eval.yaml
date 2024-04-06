@@ -30,5 +30,5 @@ parameters:
     data_key: ['json']
     qk_norm: [true]
     workers: [2]
-    averagers: ['poly_64_1']
+    # averagers: [ 'none']
     train_num_samples: [400000000]

@@ -147,6 +147,11 @@ def parse_args(args):
         default=False,
         help="Use this flag to skip the learning rate decay.",
     )
+    parser.add_argument("--schedulefree",
+        action="store_true",
+        default=False,
+        help="Using schedule free optimizer.",
+    )
     parser.add_argument("--lr-scheduler",
         type=str,
         default='cosine',
