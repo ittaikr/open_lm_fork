@@ -11,6 +11,8 @@
 #SBATCH --partition=booster
 #SBATCH --job-name=openlm
 #SBATCH --output=logs/%x_%j.out
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-user=tomerporian@mail.tau.ac.il
 
 
 # load low-level libraries
