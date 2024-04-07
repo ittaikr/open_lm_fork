@@ -554,7 +554,6 @@ def main(args):
                 betas=(args.beta1, args.beta2),
                 eps=args.eps,
                 warmup_steps=args.warmup,
-                weight_lr_power=0, #???
             )
             scaler = None
             if args.precision == "amp":
