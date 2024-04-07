@@ -117,6 +117,7 @@ def train_one_epoch(
                                 # save the loss for the average model for logging
                                 total_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
                 if args.schedulefree:
+                    model.eval()
                     optimizer.eval()
                     with autocast():
                         with torch.no_grad():
@@ -153,6 +154,7 @@ def train_one_epoch(
                                     out_avg, _ = averager.av_model(inputs_ii)
                                     local_avg_losses[key] = loss(out_avg.reshape(-1, args.vocab_size), targets_ii.reshape(-1)) / args.accum_freq
                         if args.schedulefree:
+                            model.eval()
                             optimizer.eval()
                             with torch.no_grad():
                                 out_schedfree, _ = model(inputs_ii)
@@ -175,6 +177,7 @@ def train_one_epoch(
                         if args.schedulefree:
                             losses_schedfree += local_losses_schedfree
         if args.schedulefree:
+            model.train()
             optimizer.train()
         if scaler is not None:
             if args.grad_clip_norm is not None:
