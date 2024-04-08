@@ -4,7 +4,7 @@ job_details:
   num_gpus: 4
   num_nodes: 1
 parameters:
-    model: ['layers=4_hidden-dim=128', 'layers=6_hidden-dim=244', 'layers=9_hidden-dim=320']
+    model: ['layers=4_hidden-dim=128', 'layers=6_hidden-dim=224', 'layers=9_hidden-dim=320']
     train_num_samples: [426766791] # ~426M
     warmup: [100,200]
     dataset_resampled: [false]

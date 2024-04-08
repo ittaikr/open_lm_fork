@@ -6,7 +6,7 @@ job_details:
 parameters:
     model: ['layers=21_hidden-dim=832', 'layers=26_hidden-dim=1120', 'layers=30_hidden-dim=1504']
     train_num_samples: [426766791] # ~426M
-    warmup: [2000]
+    warmup: [200, 500, 2000]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     batch_size: [16]
