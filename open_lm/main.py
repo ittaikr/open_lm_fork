@@ -534,7 +534,7 @@ def main(args):
     # create optimizer and scaler
     optimizer = None
     scaler = None
-    if args.averagers is not None:
+    if args.averagers is not None and args.averagers != 'none':
         averagers = ModelAverager(model, args.averagers, device)
 
     if args.resume is not None:
