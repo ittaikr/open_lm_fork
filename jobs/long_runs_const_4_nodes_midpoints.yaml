@@ -1,10 +1,14 @@
 job_details:
-  name: long_runs_const_4_nodes_midpoints
+  name: long_runs_const_4_nodes_midpoints_2
   output_dir: exps
   num_gpus: 4
   num_nodes: 4
 parameters:
-    model: ['layers=21_hidden-dim=832', 'layers=26_hidden-dim=1120', 'layers=30_hidden-dim=1504']
+    model: [
+      # 'layers=21_hidden-dim=832', 
+      # 'layers=26_hidden-dim=1120', 
+      'layers=30_hidden-dim=1504'
+      ]
     train_num_samples: [426766791] # ~426M
     warmup: [200, 500, 2000]
     dataset_resampled: [false]
@@ -22,7 +26,7 @@ parameters:
     data_key: ['json']
     lr_cooldown_end: [3.0e-05]
     qk_norm: [true]
-    z_loss_coefficient: [0.0001]s
+    z_loss_coefficient: [0.0001]
     lr_scheduler: ['const']
     wd: [0.033]
     lr: [3.0e-03]
@@ -32,5 +36,5 @@ parameters:
     delete_previous_checkpoint: [true]
     keep_powers_of_two: [5]
     workers: [2]
-    accum_freq: [2]
+    accum_freq: [4]
     averagers: ['poly_32_1,poly_32_100']

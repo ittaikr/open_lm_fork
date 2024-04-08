@@ -124,6 +124,9 @@ def train_one_epoch(
                             out_schedfree, _ = model(inputs)
                             losses_schedfree = loss(out_schedfree.reshape(-1, args.vocab_size), targets.reshape(-1))
                             losses_schedfree_m.update(losses_schedfree.item())
+                    if args.schedulefree:
+                        model.train()
+                        optimizer.train()
             
         else:
             assert (
@@ -160,6 +163,9 @@ def train_one_epoch(
                                 out_schedfree, _ = model(inputs_ii)
                                 local_losses_schedfree = loss(out_schedfree.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
                                 losses_schedfree_m.update(local_losses_schedfree.item())
+                            if args.schedulefree:
+                                model.train()
+                                optimizer.train()
                 if ii == 0:
                     total_loss = local_loss
                     if log_avg(i, num_batches_per_epoch):
@@ -176,9 +182,7 @@ def train_one_epoch(
                                 total_loss_avg[key] += local_avg_losses[key]
                         if args.schedulefree:
                             losses_schedfree += local_losses_schedfree
-        if args.schedulefree:
-            model.train()
-            optimizer.train()
+        
         if scaler is not None:
             if args.grad_clip_norm is not None:
                 scaler.unscale_(optimizer)
