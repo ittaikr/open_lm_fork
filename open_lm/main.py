@@ -115,31 +115,29 @@ def get_state_dict(name):
 
 def load_model(args, model, averagers=None):
     checkpoint = pt_load(args.resume, map_location="cpu")
-    with profiler.profile(profile_memory=True, use_cuda=True) as prof:
-        if "epoch" in checkpoint:
-            # resuming a train checkpoint w/ epoch and optimizer state
-            start_epoch = checkpoint["epoch"]
-            sd = checkpoint["state_dict"]
-            if next(iter(sd.items()))[0].startswith("module"):
-                print("erase module. from keys in state_dict")
-                sd = {k[len("module.") :]: v for k, v in sd.items()}
-            model.load_state_dict(sd)
-            logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
-            if averagers is not None:
-                for k in averagers.avgs_dict:
-                    avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
-                    # if next(iter(avg_sd.items()))[0].startswith("module"):
-                    #     print("erase module. from keys in averager {}".format(k))
-                    #     avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
-                    averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
-                    del avg_sd
-                    gc.collect()
-                    logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
-        else:
-            # loading a bare (model only) checkpoint for fine-tune or evaluation
-            model.load_state_dict(checkpoint)
-            logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
-    print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
+    if "epoch" in checkpoint:
+        # resuming a train checkpoint w/ epoch and optimizer state
+        start_epoch = checkpoint["epoch"]
+        sd = checkpoint["state_dict"]
+        if next(iter(sd.items()))[0].startswith("module"):
+            print("erase module. from keys in state_dict")
+            sd = {k[len("module.") :]: v for k, v in sd.items()}
+        model.load_state_dict(sd)
+        logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
+        if averagers is not None:
+            for k in averagers.avgs_dict:
+                avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
+                # if next(iter(avg_sd.items()))[0].startswith("module"):
+                #     print("erase module. from keys in averager {}".format(k))
+                #     avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
+                averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
+                del avg_sd
+                gc.collect()
+                logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
+    else:
+        # loading a bare (model only) checkpoint for fine-tune or evaluation
+        model.load_state_dict(checkpoint)
+        logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch
 
 def load_avg_models(args, averagers, device):

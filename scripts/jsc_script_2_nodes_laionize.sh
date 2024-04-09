@@ -7,7 +7,7 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=12
 # #SBATCH --wait-all-nodes=1
-#SBATCH --time=1-00:00:00
+#SBATCH --time=6:00:00
 #SBATCH --partition=booster
 #SBATCH --job-name=openlm
 #SBATCH --output=logs/%x_%j.out
