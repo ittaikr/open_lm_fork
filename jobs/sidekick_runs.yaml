@@ -6,7 +6,6 @@ parameters:
     accum_freq: [2]
     train_num_samples: [400000000] # ~400M, so *100 = 40B tokens
     lr_scheduler: ['cosine']
-    epochs_cooldown: [5]
     warmup: [1000]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
