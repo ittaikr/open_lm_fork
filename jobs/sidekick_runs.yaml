@@ -34,6 +34,9 @@ parameters:
     keep_from: [50]
     # keep_powers_of_two: [5]
     workers: [2]
-    averagers: ['poly_32_1,poly_16_1,poly_08_1']
+    averagers: [
+      'poly_32_1,poly_32_10,poly_32_100,poly_32_1000',
+      'poly_16_1,poly_16_10,poly_16_100,poly_16_1000',
+      'poly_08_1,poly_08_10,poly_08_100,poly_08_1000']
     # schedulefree: [true]
     # skip_scheduler: [true]
