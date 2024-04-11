@@ -161,7 +161,6 @@ def train_one_epoch(
                             with torch.no_grad():
                                 out_schedfree, _ = model(inputs_ii)
                                 local_losses_schedfree = loss(out_schedfree.reshape(-1, args.vocab_size), targets_ii.reshape(-1)) / args.accum_freq
-                                losses_schedfree_m.update(local_losses_schedfree.item())
                             model.train()
                             optimizer.train()
                 if ii == 0:
