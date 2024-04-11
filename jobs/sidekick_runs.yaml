@@ -13,7 +13,7 @@ parameters:
     precision: ['amp_bfloat16']
     batch_size: [16]
     grad_checkpointing: [true]
-    WD_LOG_LIST:
+    LIST_WD_LOG:
       - wd: [0.001, 0.0033, 0.01, 0.033, 0.1, 0.33, 1.0]
         log_avg_model_training_loss: [20]
       - wd: [0.033]
@@ -38,6 +38,6 @@ parameters:
     keep_from: [75]
     # keep_powers_of_two: [5]
     workers: [2]
-    averagers: ['poly_32_1,poly_32_100']
+    # averagers: ['poly_32_1,poly_32_100']
     schedulefree: [true]
     skip_scheduler: [true]
