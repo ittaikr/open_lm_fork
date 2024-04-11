@@ -1,14 +1,14 @@
 #!/bin/bash -x
 
-#SBATCH --account=laionize
+#SBATCH --account=cstdl
 #SBATCH --nodes=1
 #SBATCH --exclude=jwb[0026,0098,0193,0631,0731,0729,0801,0807,0833,0964,1021]
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=12
 # #SBATCH --wait-all-nodes=1
-#SBATCH --time=40:00
-#SBATCH --partition=booster
+#SBATCH --time=30:00
+#SBATCH --partition=develbooster
 #SBATCH --job-name=openlm
 #SBATCH --output=logs/%x_%j.out
 
@@ -52,4 +52,4 @@ cd ${OPEN_CLIP_HOME}
 LOGS="/p/scratch/ccstdl/porian1/$3"
 
 WANDB_MODE=offline
-srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main --name "$2" --logs $LOGS --val-data "/p/fastdata/mmlaion/lmdata/rpj/shard_{00000000..00000003}.tar"  --config $1 
+srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main --name "$2" --logs $LOGS --val-data "./random_val_shards/*"  --config $1 
