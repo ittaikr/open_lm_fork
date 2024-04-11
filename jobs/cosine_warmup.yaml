@@ -22,7 +22,7 @@ parameters:
     eps: [1.0e-08]
     report_to: ['wandb']
     resume: ['latest']
-    data_key: ['json']
+    data_key: ['json.gz']
     lr_cooldown_end: [0.0]
     qk_norm: [true]
     z_loss_coefficient: [0.0001]

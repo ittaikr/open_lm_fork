@@ -160,7 +160,7 @@ def train_one_epoch(
                             optimizer.eval()
                             with torch.no_grad():
                                 out_schedfree, _ = model(inputs_ii)
-                                local_losses_schedfree = loss(out_schedfree.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
+                                local_losses_schedfree = loss(out_schedfree.reshape(-1, args.vocab_size), targets_ii.reshape(-1)) / args.accum_freq
                                 losses_schedfree_m.update(local_losses_schedfree.item())
                             model.train()
                             optimizer.train()
@@ -226,7 +226,7 @@ def train_one_epoch(
             losses_m.update(global_loss_tensor.item(), batch_size)
             if log_avg(i, num_batches_per_epoch):
                 if args.schedulefree:
-                    losses_schedfree_m.update(losses_schedfree.item())
+                    losses_schedfree_m.update(losses_schedfree.item(), batch_size)
                 if averagers is not None:
                     for key, value in total_loss_avg.items():
                         losses_avg_m[key].update(value.item(), batch_size)

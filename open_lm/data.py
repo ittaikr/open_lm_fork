@@ -38,7 +38,12 @@ def proc_token_neox(x):
     
 def preprocess_text(text):
     return [proc_token(x) for x in ast.literal_eval(text.decode())]
-    
+
+# Decoding done in webdataset
+def preprocess_json(text, vocab_size):
+    text = [proc_token(x) for x in text]
+    return text
+
 def preprocess_json_text_neox(text):
     text = json.loads(text.decode())
     text = [proc_token_neox(x) for x in text]
@@ -351,15 +356,18 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
                 # at this point, we have an iterator over the shards assigned to each worker
                 wds.tarfile_to_samples(handler=log_and_continue),
             ])
-        
-        if data_key == "json":
-            preprocess_json_text = preprocess_json_text_neox if args.vocab_size == 50432 else preprocess_json_text_tiktoken
-            pipeline.extend([
-                wds.map_dict(json=preprocess_json_text),
-                wds.to_tuple("json"),
-                wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                wds.batched(args.batch_size, partial=not is_train)
-            ])
+        map_handler = {}
+        if data_key == "json" or data_key == "json.gz":
+            pipeline.extend(
+                [
+                    wds.decode(**map_handler),
+                    wds.rename(json=data_key),
+                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("json", **map_handler),
+                    wds.select(partial(filter_lt_seqlen, args.seq_len)),
+                    wds.batched(args.batch_size, partial=not is_train),
+                ]
+            )
         else:
             pipeline.extend([
                 wds.map_dict(txt=preprocess_text),
