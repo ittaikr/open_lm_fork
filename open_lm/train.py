@@ -123,7 +123,6 @@ def train_one_epoch(
                         with torch.no_grad():
                             out_schedfree, _ = model(inputs)
                             losses_schedfree = loss(out_schedfree.reshape(-1, args.vocab_size), targets.reshape(-1))
-                            losses_schedfree_m.update(losses_schedfree.item())
                     model.train()
                     optimizer.train()
             
