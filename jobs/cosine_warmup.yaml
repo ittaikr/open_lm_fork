@@ -1,5 +1,5 @@
 job_details:
-  name: cosine_warmup_v2
+  name: cosine_warmup_v2_new_shards
   output_dir: exps
 parameters:
     model: ['layers=14_hidden-dim=576']

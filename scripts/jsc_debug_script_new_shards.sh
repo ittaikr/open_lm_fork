@@ -1,19 +1,17 @@
 #!/bin/bash -x
 
-#SBATCH --account=laionize
+#SBATCH --account=cstdl
 #SBATCH --nodes=2
-#SBATCH --exclude=jwb[0026,0098,0193,0631,0731,0729,0801,0807,0833,0964,1021,0470,0471,1153,1181,1193,1184,1099,1090,1158,1120,1174,1155,0542,0540,0860,0858,1177,0571,0857,0854,0469,0460]
+#SBATCH --exclude=jwb[0026,0098,0193,0631,0731,0729,0801,0807,0833,0964,1021]
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=12
 # #SBATCH --wait-all-nodes=1
-#SBATCH --time=1-00:00:00
-#SBATCH --partition=booster
+# set the time limit for 30 minutes
+#SBATCH --time=00:30:00
+#SBATCH --partition=develbooster
 #SBATCH --job-name=openlm
 #SBATCH --output=logs/%x_%j.out
-#SBATCH --mail-type=FAIL
-#SBATCH --mail-user=tomerporian@mail.tau.ac.il
-
 
 
 # load low-level libraries
@@ -53,6 +51,5 @@ export PYTHONPATH="$PYTHONPATH:${OPEN_CLIP_HOME}"
 cd ${OPEN_CLIP_HOME}
 
 LOGS="/p/scratch/ccstdl/porian1/$3"
-
 WANDB_MODE=offline
-srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main --name "$2" --logs $LOGS --train-data "/p/fastdata/mmlaion/lmdata/rpj/shard_{00000004..00099999}.tar" --config $1 
+srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main --name "$2" --logs $LOGS --train-data "/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000001..00001747}.tar" --config $1 

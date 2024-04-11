@@ -4,17 +4,7 @@ job_details:
 parameters:
     model: ['layers=14_hidden-dim=576']
     accum_freq: [2]
-    LIST_BUDGETS_SCHEDS:
-      - train_num_samples: [400000000] # 400M, so *100 = 40B tokens
-        epochs_cooldown: [5, 10, 20, 30]
-      - train_num_samples: [385000000] # ~385M, so *100 = 38.5B tokens
-        epochs_cooldown: [5]
-      - train_num_samples: [370000000] # ~370M, so *100 = 37B tokens
-        epochs_cooldown: [10]
-      - train_num_samples: [340000000] # ~340M, so *100 = 34B tokens
-        epochs_cooldown: [20]
-      - train_num_samples: [300000000] # ~300M, so *100 = 30B tokens
-        epochs_cooldown: [5, 10, 20, 30]
+    train_num_samples: [400000000] # 400M, so *100 = 40B tokens
     warmup: [1000]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
