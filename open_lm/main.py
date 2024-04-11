@@ -767,9 +767,15 @@ def main(args):
 
         # 613 - 610 at halfway
         # Saving checkpoints.
+        if args.schedulefree:
+            optimizer.eval()
+            model.eval()
         save_checkpoint(
             args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers
         )
+        if args.schedulefree:
+            optimizer.train()
+            model.train()
 
     if args.wandb and is_master(args):
         wandb.finish()
