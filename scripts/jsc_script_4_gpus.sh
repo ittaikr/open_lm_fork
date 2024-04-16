@@ -7,11 +7,12 @@
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=12
 # #SBATCH --wait-all-nodes=1
-#SBATCH --time=06:00:00
+#SBATCH --time=30:00
 #SBATCH --partition=booster
 #SBATCH --job-name=openlm
 #SBATCH --output=logs/%x_%j.out
-
+#SBATCH --mail-type=FAIL
+#SBATCH --mail-user=tomerporian@mail.tau.ac.il
 
 # load low-level libraries
 ml purge

@@ -1,5 +1,5 @@
 job_details:
-  name: sidekick_runs_eval
+  name: sidekick_runs_eval_coisine_warmup_v2_new_shards
   output_dir: exps
 parameters:
     model: ['layers=14_hidden-dim=576']
@@ -10,10 +10,29 @@ parameters:
     log_every_n_steps: [1]
     grad_clip_norm: [1]
     resume: [
-      'exps/24-04-03-sidekick_runs_debug/012_24-04-03-sidekick_runs_debug+lr=0.003+tra_num_sam=400000000+lr_sch=cosine/checkpoints/epoch_74.pt'
+      # 'exps/24-04-13-sidekick_runs_schedulefree_log_every_100/000_24-04-13-sidekick_runs_schedulefree_log_every_100+/checkpoints/epoch_74.pt',
+      # 'exps/24-04-11-sidekick_runs_schedulefree/002_24-04-11-sidekick_runs_schedulefree+lr=0.009+bet=0.95/checkpoints/epoch_74.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/004_24-04-07-sidekick_runs_schedulefree+bet=0.95+lr=0.009/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/005_24-04-07-sidekick_runs_schedulefree+bet=0.95+lr=0.003/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/006_24-04-07-sidekick_runs_schedulefree+bet=0.98+lr=0.03/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/000_24-04-07-sidekick_runs_schedulefree+bet=0.9+lr=0.03/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/001_24-04-07-sidekick_runs_schedulefree+bet=0.9+lr=0.009/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/002_24-04-07-sidekick_runs_schedulefree+bet=0.9+lr=0.003/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/003_24-04-07-sidekick_runs_schedulefree+bet=0.95+lr=0.03/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/007_24-04-07-sidekick_runs_schedulefree+bet=0.98+lr=0.009/checkpoints/epoch_100.pt',
+      # 'exps/24-04-07-sidekick_runs_schedulefree/008_24-04-07-sidekick_runs_schedulefree+bet=0.98+lr=0.003/checkpoints/epoch_100.pt',
+      # 'exps/24-04-13-sidekick_runs_schedulefree_log_every_100/000_24-04-13-sidekick_runs_schedulefree_log_every_100+/checkpoints/epoch_74.pt',
+      # 'exps/24-04-15-cosine_warmup_v2_new_shards_/000_24-04-15-cosine_warmup_v2_new_shards_+/checkpoints/epoch_100.pt',
+      'exps/24-04-15-cosine_warmup_v2_new_shards_/000_24-04-15-cosine_warmup_v2_new_shards_+/checkpoints/epoch_74.pt',
+      'exps/24-04-15-cosine_warmup_v2_new_shards_/000_24-04-15-cosine_warmup_v2_new_shards_+/checkpoints/epoch_79.pt',
+      'exps/24-04-15-cosine_warmup_v2_new_shards_/000_24-04-15-cosine_warmup_v2_new_shards_+/checkpoints/epoch_84.pt',
+      'exps/24-04-15-cosine_warmup_v2_new_shards_/000_24-04-15-cosine_warmup_v2_new_shards_+/checkpoints/epoch_89.pt',
+      'exps/24-04-15-cosine_warmup_v2_new_shards_/000_24-04-15-cosine_warmup_v2_new_shards_+/checkpoints/epoch_94.pt',
+      'exps/24-04-15-cosine_warmup_v2_new_shards_/000_24-04-15-cosine_warmup_v2_new_shards_+/checkpoints/epoch_99.pt',
       ]
-    data_key: ['json']
+    data_key: ['json.gz']
     qk_norm: [true]
     workers: [2]
-    averagers: ['poly_64_1', 'none']
-    train_num_samples: [400000000]
+    averagers: ['none']
+    train_num_samples: [4000000000]
+    # schedulefree: [true]
