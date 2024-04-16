@@ -1,12 +1,13 @@
 from pathlib import Path
 import json
 import csv
+import os
 
 def jsonl_to_csv(directory_path: str) -> None:
     jsonl_path = Path(directory_path) / "checkpoints" / "results.jsonl"
     csv_path = Path(directory_path) / "summary_eval.csv"
     if not jsonl_path.exists():
-        print(f"Could not find {jsonl_path}")
+        # print(f"Could not find {jsonl_path}")
         return
     with jsonl_path.open('r') as jsonl_file, csv_path.open('w', newline='') as csv_file:
         writer = csv.writer(csv_file)
@@ -25,5 +26,6 @@ def apply_jsonl_to_csv_to_subdirectories(directory_path: str) -> None:
             jsonl_to_csv(str(subdirectory))
 
 if __name__ == "__main__":
-    for directory in ["exps/24-04-03-sidekick_runs_debug", "exps/24-04-04-cosine_warmup", "exps/24-04-04-sidekick_runs_rerun_cooldown", "exps/24-04-05-cosine_warmup_v2", "exps/24-04-05-sidekick_runs_rerun_const"]:
-        apply_jsonl_to_csv_to_subdirectories(directory)
+    list_of_directories = os.listdir("exps")
+    for directory in list_of_directories:
+        apply_jsonl_to_csv_to_subdirectories("exps/" + directory)

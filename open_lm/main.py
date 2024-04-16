@@ -229,9 +229,9 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
                 elif np.log2(to_keep)==int(np.log2(to_keep)) and to_keep * 2**args.keep_powers_of_two > args.epochs:
                     # don't delete the checkpoint in that case, but do delete the optimizer
                     keeping_flag = False
-            if args.keep_freq != 0 and completed_epoch % args.keep_freq == 0:
+            if args.keep_freq != 0 and (completed_epoch - 1) % args.keep_freq == 0:
                 keeping_flag = False
-            if args.keep_from != 0 and completed_epoch < args.keep_from:
+            if args.keep_from != 0 and (completed_epoch - 1) < args.keep_from:
                 keeping_flag = True
             
             previous_checkpoint = os.path.join(
