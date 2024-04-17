@@ -1,35 +1,38 @@
 job_details:
-  name: batch_size_comparison_big
+  name: batch_size_comparison_1_node
   output_dir: exps
   num_gpus: 4
-  num_nodes: 4
+  num_nodes: 1
 parameters:
-    LIST_MODELS_ACC:
-      - model: ['layers=8_hidden-dim=704']
-        accum_freq: [1]
-        batch_size: [4,8,12,16]
-      - model: ['layers=23_hidden-dim=1024']
-        accum_freq: [1]
-        batch_size: [4,8,12]
-      - model: ['layers=23_hidden-dim=1024']
-        accum_freq: [2]
-        batch_size: [16]
-      - model: ['layers=26_hidden-dim=1312']
-        accum_freq: [1]
-        batch_size: [4]
-      - model: ['layers=26_hidden-dim=1312']
-        accum_freq: [2]
-        batch_size: [8,12]
-      - model: ['layers=26_hidden-dim=1312']
-        accum_freq: [4]
-        batch_size: [16]
-    # model: ['layers=3_hidden-dim=96', 'layers=4_hidden-dim=128', 'layers=5_hidden-dim=160', 'layers=6_hidden-dim=244']
+    # LIST_MODELS_ACC:
+    #   - model: ['layers=8_hidden-dim=704']
+    #     accum_freq: [1]
+    #     batch_size: [4,8,12,16]
+    #   - model: ['layers=23_hidden-dim=1024']
+    #     accum_freq: [1]
+    #     batch_size: [4,8,12]
+    #   - model: ['layers=23_hidden-dim=1024']
+    #     accum_freq: [2]
+    #     batch_size: [16]
+    #   - model: ['layers=26_hidden-dim=1312']
+    #     accum_freq: [1]
+    #     batch_size: [4]
+    #   - model: ['layers=26_hidden-dim=1312']
+    #     accum_freq: [2]
+    #     batch_size: [8,12]
+    #   - model: ['layers=26_hidden-dim=1312']
+    #     accum_freq: [4]
+    #     batch_size: [16]
+    LIST_MODEL_BS:
+      - model: ['layers=14_hidden-dim=576']
+        batch_size: [5]
+      - model: ['layers=18_hidden-dim=704']
+        batch_size: [5]
     train_num_samples: [100000000] # ~100M
     warmup: [200]
-    
+    accum_freq: [1]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
-    
     grad_checkpointing: [true]
     log_every_n_steps: [20]
     csv_log: [true]
