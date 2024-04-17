@@ -1,6 +1,8 @@
 job_details:
-  name: sidekick_runs_sparse_averaging_dbg
+  name: sidekick_runs_sparse_averaging
   output_dir: exps
+  num_gpus: 4
+  num_nodes: 2
 parameters:
     model: ['layers=14_hidden-dim=576'] # 86M params
     accum_freq: [1]
@@ -33,4 +35,4 @@ parameters:
     keep_freq: [5]
     keep_from: [75]
     workers: [2]
-    train_data: ["['/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000005..00001747}.tar']"]
+    # train_data: ["['/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000005..00001747}.tar']"]
