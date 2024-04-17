@@ -40,3 +40,4 @@ parameters:
     averagers: ['none']
     train_num_samples: [4000000000]
     # schedulefree: [true]
+    val_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000001..00000004}.tar"]

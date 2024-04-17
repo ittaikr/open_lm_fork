@@ -35,3 +35,4 @@ parameters:
     keep_freq: [5]
     keep_from: [75]
     workers: [2]
+    train_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000005..00001747}.tar"]

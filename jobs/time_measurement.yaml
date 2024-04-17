@@ -36,3 +36,4 @@ parameters:
     # fsdp: [true]
     # fsdp_amp: [true]
     # fsdp_limit_all_gather: [true]
+    train_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000005..00001747}.tar"]

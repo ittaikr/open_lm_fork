@@ -52,4 +52,4 @@ cd ${OPEN_CLIP_HOME}
 LOGS="/p/scratch/ccstdl/porian1/$3"
 
 WANDB_MODE=offline
-srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main --name "$2" --logs $LOGS --val-data "/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000001..00000004}.tar"  --config $1 
+srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python -u -m open_lm.main --name "$2" --logs $LOGS  --config $1 

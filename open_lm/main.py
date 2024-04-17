@@ -580,6 +580,8 @@ def main(args):
     # use tokenizer=None because the data is already pre-tokenized.
     if args.val_data is not None:
         args.val_data = [args.val_data]
+    if args.train_data is not None and not isinstance(args.train_data, list):
+        args.train_data = [args.train_data]
     data = get_data(
         args,
         epoch=start_epoch,

@@ -33,3 +33,4 @@ parameters:
     delete_previous_checkpoint: [true]
     keep_powers_of_two: [5]
     workers: [2]
+    train_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000005..00001747}.tar"]
