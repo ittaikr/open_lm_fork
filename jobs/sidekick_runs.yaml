@@ -1,5 +1,5 @@
 job_details:
-  name: sidekick_runs_sparse_averaging
+  name: sidekick_runs_sparse_averaging_laionize
   output_dir: exps
   num_gpus: 4
   num_nodes: 2
@@ -20,7 +20,7 @@ parameters:
     beta1: [0.9]
     beta2: [0.95]
     eps: [1.0e-08]
-    log_avg_model_training_loss: [100]
+    log_avg_model_training_loss: [20]
     report_to: ['wandb']
     resume: ['latest']
     data_key: ['json.gz'] # using the new shards - changed train_data config in slurm script
