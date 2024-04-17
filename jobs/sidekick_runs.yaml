@@ -7,7 +7,7 @@ parameters:
     warmup: [1000]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
-    batch_size: [16]
+    batch_size: [3] # running on 2 nodes with 4 GPUs each, so global batch size = 24
     grad_checkpointing: [true]
     csv_log: [true]
     grad_clip_norm: [1]
