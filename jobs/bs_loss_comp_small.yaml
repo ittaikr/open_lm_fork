@@ -1,0 +1,54 @@
+job_details:
+  name: bs_loss_comp_small_2
+  output_dir: exps
+  # num_nodes: 1
+  # num_gpus: 4
+parameters:
+    LIST_ACC_BS:
+      - model: ['layers=3_hidden-dim=96']
+        accum_freq: [1]
+        train_num_samples: [10000000] # ~10M, so *10 = 100M tokens
+      - model: ['layers=4_hidden-dim=128']
+        accum_freq: [1]
+        train_num_samples: [10000000] # ~10M, so *10 = 100M tokens
+      - model: ['layers=5_hidden-dim=160']
+        accum_freq: [1]
+        train_num_samples: [20000000] # ~20M, so *10 = 200M tokens
+    LIST_BS_LR:
+      - batch_size: [16]
+        lr: [0.00424, 0.006, 0.003]
+      - batch_size: [8]
+        lr: [0.00424, 0.006]
+      - batch_size: [4]
+        lr: [0.003, 0.00424]
+      - batch_size: [2]
+        lr: [0.00212, 0.003]
+      - batch_size: [1]
+        lr: [0.0015, 0.00212]
+    lr_scheduler: ['cosine']
+    warmup: [200]
+    dataset_resampled: [false]
+    precision: ['amp_bfloat16']
+    grad_checkpointing: [true]
+    log_every_n_steps: [20]
+    csv_log: [true]
+    grad_clip_norm: [1]
+    beta1: [0.9]
+    beta2: [0.95]
+    eps: [1.0e-08]
+    report_to: ['wandb']
+    resume: ['latest']
+    data_key: ['json.gz']
+    lr_cooldown_end: [0.0]
+    qk_norm: [true]
+    z_loss_coefficient: [0.0001]
+    wd: [0.033]
+    epochs: [10]
+    wandb_project_name: ['lm_grid_160m_more_avgs']
+    log_avg_model_training_loss: [20]
+    delete_previous_checkpoint: [true]
+    # keep_freq: [5]
+    # keep_from: [75]
+    workers: [2]
+    train_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000005..00001747}.tar"]
+    # val_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000001..00000004}.tar"]
