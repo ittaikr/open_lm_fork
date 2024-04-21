@@ -354,6 +354,11 @@ def parse_args(args):
         default=None,
         help="Optinoally average checkpoints along the trajectory.",
     )
+    parser.add_argument("--flops-to-save",
+        type=str,
+        default=None,
+        help="a list of flops to save checkpoints at, divided by ','.",
+    )
     parser.add_argument("--remote-sync",
         type=str,
         default=None,

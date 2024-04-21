@@ -25,6 +25,8 @@ from .distributed import is_master
 from .precision import get_autocast
 import schedulefree
 
+from .saving_utils import save_checkpoint_step
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
@@ -62,6 +64,13 @@ def train_one_epoch(
     model, data, loss, epoch, optimizer, scaler, scheduler, averagers, args, tb_writer=None, csv_path=None
 ):
     log_avg = lambda i, num_batches_per_epoch: args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or (i+1) == num_batches_per_epoch)
+    # for saving checkpoints based on flops
+    if args.flops_to_save is not None:
+        d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
+        params_count = float(12 * (d_model**2) * num_layers + (2048 + 50432) * d_model)
+        flops_to_save = args.flops_to_save.split(",")
+        flops_to_save = [float(flop) for flop in flops_to_save]
+        flop_counter = 0
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
 
@@ -283,6 +292,14 @@ def train_one_epoch(
                 with open(csv_path, "a") as f:
                     dict_writer = DictWriter(f, fieldnames=rowd.keys())
                     dict_writer.writerow(rowd)
+            
+            if args.flops_to_save is not None:
+                curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * params_count
+                if curr_flops > flops_to_save[flop_counter]:
+                    if flop_counter < len(flops_to_save):
+                        save_checkpoint_step(args, model, curr_flops, averagers)
+                        logging.info(f"Saved model as it reached {curr_flops} FLOPs which is more than {flops_to_save[flop_counter]}")
+                    flop_counter += 1
 
 
             # resetting batch / data time meters per log window
