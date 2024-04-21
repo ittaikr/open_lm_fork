@@ -763,9 +763,31 @@ def main(args):
 
         evaluation_loss = -1
         if "val" in data:
-            evaluation_loss = evaluate(model, data, completed_epoch, args, writer)[
-                "loss"
-            ]
+
+            csv_path_eval = os.path.join(args.logs, args.name, "summary_eval.csv")
+            metrics = evaluate(model, data, completed_epoch, args, writer)
+            metrics["val_data"] = args.val_data
+            metrics["model"] = args.model
+            metrics["average"] = 'none'
+            metrics["epoch"] = completed_epoch
+            evaluation_loss = metrics["loss"]
+
+            # write the metrics to a file called summary_eval.csv
+            if args.save_logs and args.csv_log and is_master(args):
+                with open(csv_path_eval, "a") as f:
+                    if epoch == 0:
+                        f.write(",".join(metrics.keys()) + "\n")
+                    f.write(",".join([str(v) for v in metrics.values()]) + "\n")
+            if averagers is not None:
+                for k in averagers.avgs_dict.keys():
+                    metrics = evaluate(averagers.avgs_dict[k].av_model, data, completed_epoch, args, writer)
+                    metrics["val_data"] = args.val_data
+                    metrics["model"] = args.model
+                    metrics["average"] = k
+                    metrics["epoch"] = completed_epoch
+                    if args.save_logs and args.csv_log and is_master(args):
+                        with open(csv_path_eval, "a") as f:
+                            f.write(",".join([str(v) for v in metrics.values()]) + "\n")
 
         # 613 - 610 at halfway
         # Saving checkpoints.
