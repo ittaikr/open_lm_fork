@@ -147,7 +147,10 @@ def load_avg_models(args, averagers, device):
         start_epoch = checkpoint["epoch"]
         if averagers is not None:
             for k in averagers.avgs_dict:
-                avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
+                try:
+                    avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
+                except:
+                    avg_sd = torch.load(args.resume.replace('flop', k), map_location='cpu')
                 if next(iter(avg_sd.items()))[0].startswith("module"):
                     print("erase module. from keys in state_dict")
                     avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}

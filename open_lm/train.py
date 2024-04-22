@@ -67,7 +67,7 @@ def train_one_epoch(
     # for saving checkpoints based on flops
     if args.flops_to_save is not None:
         d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
-        params_count = float(12 * (d_model**2) * num_layers + (args.seq_len + args.vocab_size) * d_model)
+        params_count = float(12 * (d_model**2) * num_layers + args.vocab_size * d_model)
         flops_to_save = args.flops_to_save.split(",")
         flops_to_save = [float(flop) for flop in flops_to_save]
         flop_counter = 0
@@ -321,8 +321,9 @@ def train_one_epoch(
             if args.flops_to_save is not None:
                 curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * params_count
                 if flop_counter < len(flops_to_save):
+                    logging.info(f"Current FLOPs: {curr_flops}, saving model at {flops_to_save[flop_counter]} FLOPs")
                     if curr_flops > flops_to_save[flop_counter]:
-                        save_checkpoint_step(args, model, curr_flops, averagers)
+                        save_checkpoint_step(args, model, curr_flops, epoch, averagers)
                         logging.info(f"Saved model as it reached {curr_flops} FLOPs which is more than {flops_to_save[flop_counter]}")
                     flop_counter += 1
 
