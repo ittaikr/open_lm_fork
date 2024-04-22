@@ -67,7 +67,7 @@ def train_one_epoch(
     # for saving checkpoints based on flops
     if args.flops_to_save is not None:
         d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
-        params_count = float(12 * (d_model**2) * num_layers + (2048 + 50432) * d_model)
+        params_count = float(12 * (d_model**2) * num_layers + (args.seq_len + args.vocab_size) * d_model)
         flops_to_save = args.flops_to_save.split(",")
         flops_to_save = [float(flop) for flop in flops_to_save]
         flop_counter = 0
@@ -120,6 +120,8 @@ def train_one_epoch(
             if log_avg(i, num_batches_per_epoch):
                 if averagers is not None:
                     with autocast():
+                        inputs = texts[:, : args.seq_len - 1]
+                        targets = texts[:, 1 : args.seq_len]
                         for key, averager in averagers.avgs_dict.items():
                             with torch.no_grad():
                                 out_avg, _ = averager.av_model(inputs)
@@ -157,6 +159,8 @@ def train_one_epoch(
                     )
                 backward(local_loss, scaler)
                 with autocast():
+                    inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
+                    targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                     if log_avg(i, num_batches_per_epoch):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
@@ -295,8 +299,8 @@ def train_one_epoch(
             
             if args.flops_to_save is not None:
                 curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * params_count
-                if curr_flops > flops_to_save[flop_counter]:
-                    if flop_counter < len(flops_to_save):
+                if flop_counter < len(flops_to_save):
+                    if curr_flops > flops_to_save[flop_counter]:
                         save_checkpoint_step(args, model, curr_flops, averagers)
                         logging.info(f"Saved model as it reached {curr_flops} FLOPs which is more than {flops_to_save[flop_counter]}")
                     flop_counter += 1
