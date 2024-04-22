@@ -65,12 +65,7 @@ def train_one_epoch(
 ):
     log_avg = lambda i, num_batches_per_epoch: args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or (i+1) == num_batches_per_epoch)
     # for saving checkpoints based on flops
-    if args.flops_to_save is not None:
-        d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
-        params_count = float(12 * (d_model**2) * num_layers + args.vocab_size * d_model)
-        flops_to_save = args.flops_to_save.split(",")
-        flops_to_save = [float(flop) for flop in flops_to_save]
-        flop_counter = 0
+
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
 
@@ -319,13 +314,13 @@ def train_one_epoch(
                     dict_writer.writerow(rowd)
             
             if args.flops_to_save is not None:
-                curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * params_count
-                if flop_counter < len(flops_to_save):
-                    logging.info(f"Current FLOPs: {curr_flops}, saving model at {flops_to_save[flop_counter]} FLOPs")
-                    if curr_flops > flops_to_save[flop_counter]:
+                curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
+                if args.flop_counter < len(args.flops_to_save):
+                    logging.info(f"Current FLOPs: {curr_flops}, saving model at {args.flops_to_save[args.flop_counter]} FLOPs")
+                    if curr_flops > args.flops_to_save[args.flop_counter]:
                         save_checkpoint_step(args, model, curr_flops, epoch, averagers)
-                        logging.info(f"Saved model as it reached {curr_flops} FLOPs which is more than {flops_to_save[flop_counter]}")
-                    flop_counter += 1
+                        logging.info(f"Saved model as it reached {curr_flops} FLOPs which is more than {args.flops_to_save[args.flop_counter]}")
+                        args.flop_counter += 1
 
 
             # resetting batch / data time meters per log window

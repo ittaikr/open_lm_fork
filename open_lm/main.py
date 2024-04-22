@@ -745,6 +745,12 @@ def main(args):
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples=num_samples
             )
+        if args.flops_to_save is not None:
+            d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
+            args.params_count = float(12 * (d_model**2) * num_layers + args.vocab_size * d_model)
+            args.flops_to_save = args.flops_to_save.split(",")
+            args.flops_to_save = [float(flop) for flop in args.flops_to_save]
+            args.flop_counter = 0
         if args.world_size > 1:
             dist.barrier()
         train_one_epoch(
