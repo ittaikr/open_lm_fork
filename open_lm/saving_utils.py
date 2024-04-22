@@ -12,7 +12,12 @@ def save_checkpoint_step(args, model, completed_flop, epoch, averagers):
     }
 
     # if there will be more than args.max_checkpoints_flops checkpoints, remove the oldest one
-    if len(os.listdir(args.checkpoint_path)) >= args.max_checkpoints_flops:
+    # first, count the number of files that have "flop_" in their name
+    flop_file_counter = 0
+    for file in os.listdir(args.checkpoint_path):
+        if "flop_" in file:
+            flop_file_counter += 1
+    if flop_file_counter >= args.max_checkpoints_flops:
         oldest_flop = min([float(file.split("_")[1].split(".")[0]) for file in os.listdir(args.checkpoint_path) if "flop_" in file])
         # remove all files that have the oldest flop in their name, including averagers
         for file in os.listdir(args.checkpoint_path):

@@ -1,5 +1,5 @@
 job_details:
-  name: bs_loss_comp_small_2
+  name: bs_comparison_RW
   output_dir: exps
   # num_nodes: 1
   # num_gpus: 4
@@ -7,24 +7,33 @@ parameters:
     LIST_ACC_BS:
       - model: ['layers=3_hidden-dim=96']
         accum_freq: [1]
-        train_num_samples: [10000000] # ~10M, so *10 = 100M tokens
+        train_num_samples: [5170000] # 5.17M, so x10 = 51.7M
       - model: ['layers=4_hidden-dim=128']
         accum_freq: [1]
-        train_num_samples: [10000000] # ~10M, so *10 = 100M tokens
+        train_num_samples: [7240000] # 7.24M, so x10 = 72.4M
       - model: ['layers=5_hidden-dim=160']
         accum_freq: [1]
-        train_num_samples: [20000000] # ~20M, so *10 = 200M tokens
+        train_num_samples: [9610000] # 9.61M, so x10 = 96.1M
+      - model: ['layers=6_hidden-dim=224']
+        accum_freq: [1]
+        train_num_samples: [14900000] # 14.9M, so x10 = 149M
+      # - model: ['layers=8_hidden-dim=288'] # later - limit jobs
+      #   accum_freq: [1] # might need to change
+      #   train_num_samples: [22500000] # 22.5M, so x10 = 225M
+      # - model: ['layers=9_hidden-dim=320'] # later - limit jobs
+      #   accum_freq: [1] # might need to change
+      #   train_num_samples: [27200000] # 27.2M, so x10 = 272M
     LIST_BS_LR:
       - batch_size: [16]
-        lr: [0.00424, 0.006, 0.003]
+        lr: [0.00848, 0.006, 0.00424, 0.003]
       - batch_size: [8]
-        lr: [0.00424, 0.006]
+        lr: [0.006, 0.00424, 0.003, 0.00212]
       - batch_size: [4]
-        lr: [0.003, 0.00424]
+        lr: [0.00424, 0.003, 0.00212, 0.0015]
       - batch_size: [2]
-        lr: [0.00212, 0.003]
-      - batch_size: [1]
-        lr: [0.0015, 0.00212]
+        lr: [0.003, 0.00212, 0.0015, 0.00106]
+      # - batch_size: [1] # later
+      #   lr: [0.00212, 0.0015, 0.00106, 0.00075]
     lr_scheduler: ['cosine']
     warmup: [200]
     dataset_resampled: [false]
@@ -50,5 +59,6 @@ parameters:
     # keep_freq: [5]
     # keep_from: [75]
     workers: [2]
-    train_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000005..00001747}.tar"]
-    # val_data: ["/p/scratch/ccstdl/smyrnis1/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1/{00000001..00000004}.tar"]
+    train_data: ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00000011..00042512}.tar"]
+    flops_to_save: ["1e15,1e16"] # test
+    max_checkpoints_flops: [1] # test
