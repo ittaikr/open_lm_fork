@@ -316,7 +316,6 @@ def train_one_epoch(
             if args.flops_to_save is not None:
                 curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
                 if args.flop_counter < len(args.flops_to_save):
-                    logging.info(f"Current FLOPs: {curr_flops}, saving model at {args.flops_to_save[args.flop_counter]} FLOPs")
                     if curr_flops > args.flops_to_save[args.flop_counter]:
                         save_checkpoint_step(args, model, curr_flops, epoch, averagers)
                         logging.info(f"Saved model as it reached {curr_flops} FLOPs which is more than {args.flops_to_save[args.flop_counter]}")
