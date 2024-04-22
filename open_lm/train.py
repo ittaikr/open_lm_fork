@@ -87,10 +87,13 @@ def train_one_epoch(
         losses_schedfree = 0
         losses_schedfree_m = AverageMeter()
     losses_m = AverageMeter()
+    if args.z_loss_coefficient != 0.0:
+        z_losses_m = AverageMeter()
     if averagers is not None and args.log_avg_model_training_loss:
         losses_avg_m = {key: AverageMeter() for key in averagers.avgs_dict.keys()}
         local_avg_losses = {}
         total_loss_avg = {}
+        local_tuple_loss_avg = {}
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
 
@@ -115,8 +118,10 @@ def train_one_epoch(
                 out, _ = model(inputs)
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
-                total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))                
-            backward(total_loss, scaler)
+                tuple_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                total_loss = tuple_loss[1] if args.z_loss_coefficient != 0.0 else tuple_loss
+                total_zloss = tuple_loss[0] if args.z_loss_coefficient != 0.0 else None
+            backward(tuple_loss[0] if args.z_loss_coefficient != 0.0 else tuple_loss, scaler)
             if log_avg(i, num_batches_per_epoch):
                 if averagers is not None:
                     with autocast():
@@ -126,14 +131,16 @@ def train_one_epoch(
                             with torch.no_grad():
                                 out_avg, _ = averager.av_model(inputs)
                                 # save the loss for the average model for logging
-                                total_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
+                                tuple_loss_avg = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
+                                total_loss_avg[key] = tuple_loss_avg[1] if args.z_loss_coefficient != 0.0 else tuple_loss_avg
                 if args.schedulefree:
                     model.eval()
                     optimizer.eval()
                     with autocast():
                         with torch.no_grad():
                             out_schedfree, _ = model(inputs)
-                            losses_schedfree = loss(out_schedfree.reshape(-1, args.vocab_size), targets.reshape(-1))
+                            losses_schedfree_tuple = loss(out_schedfree.reshape(-1, args.vocab_size), targets.reshape(-1))
+                            losses_schedfree = losses_schedfree_tuple[1] if args.z_loss_coefficient != 0.0 else losses_schedfree_tuple
                     model.train()
                     optimizer.train()
             
@@ -152,12 +159,13 @@ def train_one_epoch(
 
                     if args.log_logit_mean:
                         logit_m.update(torch.mean(out).item())
-
-                    local_loss = (
+                    local_tuple_loss = (
                         loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
                         / args.accum_freq
                     )
-                backward(local_loss, scaler)
+                    local_loss = local_tuple_loss[1] if args.z_loss_coefficient != 0.0 else local_tuple_loss
+                    local_zloss = local_tuple_loss[0] if args.z_loss_coefficient != 0.0 else None
+                backward(local_tuple_loss[0] if args.z_loss_coefficient != 0.0 else local_tuple_loss, scaler)
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
                     targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
@@ -166,7 +174,8 @@ def train_one_epoch(
                             for key, averager in averagers.avgs_dict.items():
                                 with torch.no_grad():
                                     out_avg, _ = averager.av_model(inputs_ii)
-                                    local_avg_losses[key] = loss(out_avg.reshape(-1, args.vocab_size), targets_ii.reshape(-1)) / args.accum_freq
+                                    local_tuple_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets_ii.reshape(-1)) / args.accum_freq
+                                    local_avg_losses[key] = local_tuple_loss_avg[key][1] if args.z_loss_coefficient != 0.0 else local_tuple_loss_avg[key]
                         if args.schedulefree:
                             model.eval()
                             optimizer.eval()
@@ -177,6 +186,8 @@ def train_one_epoch(
                             optimizer.train()
                 if ii == 0:
                     total_loss = local_loss
+                    if local_zloss is not None:
+                        total_zloss = local_zloss
                     if log_avg(i, num_batches_per_epoch):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
@@ -185,6 +196,8 @@ def train_one_epoch(
                             losses_schedfree = local_losses_schedfree
                 else:
                     total_loss += local_loss
+                    if local_zloss is not None:
+                        total_zloss += local_zloss
                     if log_avg(i, num_batches_per_epoch):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
@@ -216,6 +229,8 @@ def train_one_epoch(
         batch_count = i + 1
         # create a copy of the loss tensor to avoid modifying the original
         global_loss_tensor = total_loss.detach().clone()
+        if args.z_loss_coefficient != 0.0:
+            global_zloss_tensor = total_zloss.detach().clone()
         if log_avg(i, num_batches_per_epoch):
             if averagers is not None:
                 for key, value in total_loss_avg.items():
@@ -225,6 +240,8 @@ def train_one_epoch(
         if args.world_size > 1:
             # all_reduce the copied loss tensor
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
+            if args.z_loss_coefficient != 0.0:
+                dist.all_reduce(global_zloss_tensor, op=ReduceOp.AVG)
             if log_avg(i, num_batches_per_epoch):
                 if args.schedulefree:
                     dist.all_reduce(losses_schedfree, op=ReduceOp.AVG)
@@ -235,6 +252,8 @@ def train_one_epoch(
             batch_size = len(inputs)
             # update the loss meter with the global loss tensor every iteration
             losses_m.update(global_loss_tensor.item(), batch_size)
+            if args.z_loss_coefficient != 0.0:
+                z_losses_m.update(global_zloss_tensor.item(), batch_size)
             if log_avg(i, num_batches_per_epoch):
                 if args.schedulefree:
                     losses_schedfree_m.update(losses_schedfree.item(), batch_size)
@@ -268,6 +287,8 @@ def train_one_epoch(
                 "lr": optimizer.param_groups[0]["lr"],
                 "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
             }
+            if args.z_loss_coefficient != 0.0:
+                log_data["z_loss"] = z_losses_m.avg
             if log_avg(i, num_batches_per_epoch):
                 if averagers is not None:
                     for key, value in losses_avg_m.items():
