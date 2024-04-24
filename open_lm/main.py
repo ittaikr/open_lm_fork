@@ -604,7 +604,7 @@ def main(args):
     scheduler = None
     if args.warmup_tokens is not None:
             args.warmup = args.warmup_tokens // (
-                args.batch_size * args.world_size
+                args.batch_size * args.world_size * args.seq_len
             )
     if "train" in data and optimizer is not None:
         if args.dataset_metadata is not None:
