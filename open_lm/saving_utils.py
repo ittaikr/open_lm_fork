@@ -17,6 +17,11 @@ def save_checkpoint_step(args, model, completed_flop, epoch, averagers):
     for file in os.listdir(args.checkpoint_path):
         if "flop_" in file:
             flop_file_counter += 1
+    newest_flop = max([-1] + # -1 in case there are no files
+    [float(file.split("_")[1].split(".")[0]) for file in os.listdir(args.checkpoint_path) if "flop_" in file]
+    )
+    if completed_flop == newest_flop:
+        return # in case of resuming, we don't want to save the same checkpoint twice
     if flop_file_counter >= args.max_checkpoints_flops:
         oldest_flop = min([float(file.split("_")[1].split(".")[0]) for file in os.listdir(args.checkpoint_path) if "flop_" in file])
         # remove all files that have the oldest flop in their name, including averagers

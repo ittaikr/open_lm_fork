@@ -315,11 +315,10 @@ def train_one_epoch(
             
             if args.flops_to_save is not None:
                 curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
-                if args.flop_counter < len(args.flops_to_save):
-                    if curr_flops > args.flops_to_save[args.flop_counter]:
-                        save_checkpoint_step(args, model, curr_flops, epoch, averagers)
-                        logging.info(f"Saved model as it reached {curr_flops} FLOPs which is more than {args.flops_to_save[args.flop_counter]}")
-                        args.flop_counter += 1
+                prev_flops = 6 * step * args.batch_size * args.seq_len * args.world_size * args.params_count
+                if np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) ):
+                    save_checkpoint_step(args, model, curr_flops, epoch, averagers)
+                    logging.info(f"Saved model as it reached {curr_flops} FLOPs")
 
 
             # resetting batch / data time meters per log window
