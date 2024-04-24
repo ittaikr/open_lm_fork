@@ -126,8 +126,8 @@ def parse_args(args):
     parser.add_argument("--beta2", type=float, default=None, help="Adam beta 2.")
     parser.add_argument("--eps", type=float, default=1.0e-8, help="Adam epsilon.")
     parser.add_argument("--wd", type=float, default=0.2, help="Weight decay.")
-    parser.add_argument( "--warmup", type=int, default=10000, help="Number of steps to warmup for."
-    )
+    parser.add_argument( "--warmup", type=int, default=10000, help="Number of steps to warmup for.")
+    parser.add_argument( "--warmup-tokens", type=int, default=None, help="Number of steps to warmup for in tokens.")
     parser.add_argument("--z-loss-coefficient",
         type=float,
         default=0.0,

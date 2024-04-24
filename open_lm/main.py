@@ -612,6 +612,10 @@ def main(args):
             cooldown_steps = (data["train"].dataloader.num_batches) * args.epochs_cooldown if args.epochs_cooldown is not None else None
         if args.schedulefree: # schedulefree, so no scheduler
             pass
+        if args.warmup_tokens is not None:
+            args.warmup = args.warmup_tokens // (
+                args.batch_size * args.world_size
+            )
         elif args.lr_scheduler == "cosine":
             scheduler = cosine_lr(
                 optimizer,
