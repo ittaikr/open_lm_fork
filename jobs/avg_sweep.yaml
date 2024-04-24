@@ -1,5 +1,5 @@
 job_details:
-  name: avg_sweep
+  name: avg_sweep_10%_warmup
   output_dir: exps
   num_nodes: 2
   num_gpus: 4
