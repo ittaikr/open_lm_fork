@@ -8,7 +8,7 @@ parameters:
       - model: ['layers=3_hidden-dim=96']
         accum_freq: [1]
         train_num_samples: [5170000] # 5.17M, so x10 = 51.7M
-        warmup_tokens: [5170000] # ~315 steps with global_bs=4
+        warmup_tokens: [5170000] # ~620 steps with global_bs=4, 10% of 51.7M
       - model: ['layers=4_hidden-dim=128']
         accum_freq: [1]
         train_num_samples: [7240000] # 7.24M, so x10 = 72.4M
