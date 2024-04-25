@@ -35,7 +35,7 @@ parameters:
     lr_scheduler: ['cosine']
     wd: [0.033]
     lr: [1.5e-03]
-    epochs: [100]
+    epochs: [1000]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
     workers: [2]
