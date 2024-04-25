@@ -1,5 +1,5 @@
 job_details:
-  name: bs_comparison_RW_5%_warmup_higher_lr_1
+  name: bs_comparison_RW_even_higher_lr_1
   output_dir: exps
   # num_nodes: 1
   # num_gpus: 4
@@ -8,15 +8,15 @@ parameters:
       - model: ['layers=3_hidden-dim=96']
         accum_freq: [1]
         train_num_samples: [5170000] # 5.17M, so x10 = 51.7M
-        warmup_tokens: [2585000]
+        warmup_tokens: [5170000]
       - model: ['layers=4_hidden-dim=128']
         accum_freq: [1]
         train_num_samples: [7240000] # 7.24M, so x10 = 72.4M
-        warmup_tokens: [3620000]
+        warmup_tokens: [7240000]
       - model: ['layers=5_hidden-dim=160']
         accum_freq: [1]
         train_num_samples: [9610000] # 9.61M, so x10 = 96.1M
-        warmup_tokens: [4805000]
+        warmup_tokens: [9610000]
       # - model: ['layers=6_hidden-dim=224'] # later - limit jobs
       #   accum_freq: [1]
       #   train_num_samples: [14900000] # 14.9M, so x10 = 149M
@@ -35,17 +35,17 @@ parameters:
       # - model: ['layers=12_hidden-dim=480'] # later - limit jobs (or remove)
       #   accum_freq: [1] # might need to change
       #   train_num_samples: [114769920] # 114.8M, so x10 = 1.148B
-    LIST_BS_LR:
+    LIST_BS_LR: # due to job limitiations, we run extra 4 lrs and not 5. if needed more will be added
       - batch_size: [16]
-        lr: [0.01696, 0.012, 0.00848, 0.006]
+        lr: [0.01696, 0.024, 0.034, 0.048]
       - batch_size: [8]
-        lr: [0.012, 0.00848, 0.006, 0.00424]
+        lr: [0.01696, 0.024, 0.034, 0.048]
       - batch_size: [4]
-        lr: [0.00848, 0.006, 0.00424, 0.003]
+        lr: [0.012, 0.01696, 0.024, 0.034]
       - batch_size: [2]
-        lr: [0.006, 0.00424, 0.003, 0.00212]
+        lr: [0.00848, 0.012, 0.01696, 0.024]
       - batch_size: [1] 
-        lr: [0.00424, 0.003, 0.00212, 0.0015]
+        lr: [0.006, 0.00848, 0.012, 0.01696]
     lr_scheduler: ['cosine']
     # warmup: [200]
     dataset_resampled: [false]
