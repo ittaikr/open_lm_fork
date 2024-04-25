@@ -766,7 +766,7 @@ def main(args):
         
         if args.world_size > 1:
             dist.barrier()
-        train_one_epoch(
+        should_break = train_one_epoch(
             model,
             data,
             loss,
@@ -779,6 +779,9 @@ def main(args):
             tb_writer=writer,
             csv_path=csv_path,
         )
+        if should_break is not None:
+            break
+
         completed_epoch = epoch + 1
         if args.world_size > 1:
             dist.barrier()

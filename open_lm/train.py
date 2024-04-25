@@ -264,6 +264,10 @@ def train_one_epoch(
             if np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) ):
                 save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
                 logging.info(f"Saved model as it reached {curr_flops} FLOPs")
+        
+        if is_master(args) and args.max_tokens is not None:
+            if (step + 1) * args.batch_size * args.seq_len * args.world_size >= args.max_tokens:
+                return "max tokens reached"
 
         if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
             batch_size = len(inputs)
@@ -335,7 +339,8 @@ def train_one_epoch(
                     losses_avg_m[k].reset()
             if args.schedulefree:
                 losses_schedfree_m.reset()
-        
+
+    return None        
     # end for
 
 def evaluate(model, data, start_epoch, args, writer):

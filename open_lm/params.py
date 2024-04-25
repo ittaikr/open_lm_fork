@@ -365,6 +365,11 @@ def parse_args(args):
         default=5,
         help="maximum number of checkpoints to save, based on flops.",
     )
+    parser.add_argument("--max-tokens",
+        type=int,
+        default=5,
+        help="maximum number of tokens that the model can see.",
+    )
     parser.add_argument("--remote-sync",
         type=str,
         default=None,
