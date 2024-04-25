@@ -328,6 +328,8 @@ def train_one_epoch(
             data_time_m.reset()
             # reset all average meters
             losses_m.reset()
+            if args.z_loss_coefficient != 0.0:
+                z_losses_m.reset()
             if averagers is not None:
                 for k in averagers.avgs_dict.keys():
                     losses_avg_m[k].reset()
