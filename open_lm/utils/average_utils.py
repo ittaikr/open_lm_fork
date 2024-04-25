@@ -183,3 +183,6 @@ class Averager(object):
         if hasattr(self, 'start'):
             self.start = state_dict['start']
         # self.state_dict = state_dict
+
+    def state_dict(self):
+        return unwrap_model(self.av_model).state_dict()
