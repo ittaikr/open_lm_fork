@@ -257,6 +257,13 @@ def train_one_epoch(
                 if averagers is not None:
                     for key, value in total_loss_avg.items():
                         losses_avg_m[key].update(value.item(), batch_size)
+                        
+        if args.flops_to_save is not None and is_master(args):
+            curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
+            prev_flops = 6 * step * args.batch_size * args.seq_len * args.world_size * args.params_count
+            if np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) ):
+                save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
+                logging.info(f"Saved model as it reached {curr_flops} FLOPs")
 
         if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
             batch_size = len(inputs)
@@ -314,22 +321,6 @@ def train_one_epoch(
                 with open(csv_path, "a") as f:
                     dict_writer = DictWriter(f, fieldnames=rowd.keys())
                     dict_writer.writerow(rowd)
-            
-            if args.flops_to_save is not None:
-                curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
-                should_save = False
-                for i in range(args.log_every_n_steps):
-                    prev_flops = 6 * (step - i) * args.batch_size * args.seq_len * args.world_size * args.params_count
-                    should_save = np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) )
-                    if should_save:
-                        save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
-                        logging.info(f"Saved model as it reached {curr_flops} FLOPs")
-                        break
-                # logging.info(f"Current FLOPs: {curr_flops:.2e}")
-                # logging.info(f"Previous FLOPs: {prev_flops:.2e}")
-                # logging.info(f"Target FLOPs: {args.flops_to_save}")
-                # if should_save:
-                    
 
 
             # resetting batch / data time meters per log window
