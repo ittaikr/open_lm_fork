@@ -545,6 +545,8 @@ def main(args):
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
+        if args.decouple_wd is not None:
+            args.wd = args.decouple_wd / args.lr
         if args.schedulefree:
             optimizer = schedulefree.AdamWScheduleFree(
                 [
