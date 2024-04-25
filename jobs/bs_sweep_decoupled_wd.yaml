@@ -1,26 +1,26 @@
 job_details:
-  name: bs_comparison_RW_decouled_wd_1
+  name: bs_comparison_RW_decouled_wd_2
   output_dir: exps
   # num_nodes: 1
   # num_gpus: 4
 parameters:
     LIST_ACC_BS:
-      - model: ['layers=3_hidden-dim=96']
-        accum_freq: [1]
-        train_num_samples: [5170000] # 5.17M, so x10 = 51.7M
-        warmup_tokens: [5170000]
       # - model: ['layers=3_hidden-dim=96']
       #   accum_freq: [1]
-      #   train_num_samples: [517000000] # 51.7M, so x10 = 0.517B (this model with x100 tok. mult.)
-      #   warmup_tokens: [517000000]
-      - model: ['layers=4_hidden-dim=128']
+      #   train_num_samples: [5170000] # 5.17M, so x10 = 51.7M
+      #   warmup_tokens: [5170000]
+      - model: ['layers=3_hidden-dim=96']
         accum_freq: [1]
-        train_num_samples: [7240000] # 7.24M, so x10 = 72.4M
-        warmup_tokens: [7240000]
-      - model: ['layers=5_hidden-dim=160']
-        accum_freq: [1]
-        train_num_samples: [9610000] # 9.61M, so x10 = 96.1M
-        warmup_tokens: [9610000]
+        train_num_samples: [517000000] # 51.7M, so x10 = 0.517B (this model with x100 tok. mult.)
+        warmup_tokens: [517000000]
+      # - model: ['layers=4_hidden-dim=128']
+      #   accum_freq: [1]
+      #   train_num_samples: [7240000] # 7.24M, so x10 = 72.4M
+      #   warmup_tokens: [7240000]
+      # - model: ['layers=5_hidden-dim=160']
+      #   accum_freq: [1]
+      #   train_num_samples: [9610000] # 9.61M, so x10 = 96.1M
+      #   warmup_tokens: [9610000]
     LIST_BS_LR: # due to job limitiations, we run extra 4 lrs and not 5. if needed more will be added
       - batch_size: [16]
         lr: [0.003, 0.006, 0.012, 0.024]
