@@ -11,7 +11,7 @@ parameters:
         warmup_tokens: [5170000]
       - model: ['layers=3_hidden-dim=96']
         accum_freq: [1]
-        train_num_samples: [517000000] # 517M, so x10 = 5.17B (this model with x100 tok. mult.)
+        train_num_samples: [517000000] # 51.7M, so x10 = 0.517B (this model with x100 tok. mult.)
         warmup_tokens: [517000000]
       - model: ['layers=4_hidden-dim=128']
         accum_freq: [1]
