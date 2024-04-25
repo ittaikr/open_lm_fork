@@ -739,7 +739,9 @@ def main(args):
             d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
         else:
             d_model, num_layers = model.tok_embeddings.embedding_dim, model.n_layers
-        args.params_count = float(12 * (d_model**2) * num_layers + args.vocab_size * d_model)
+        args.params_count = float(
+            (4 * d_model + 3 * 256 * (((2 * 4 * d_model / 3).astype(int) + 256 - 1) // 256)) * d_model * num_layers + args.vocab_size * d_model
+            )
         if is_master(args):
             args.flops_to_save = args.flops_to_save.split(",")
             args.flops_to_save = np.array([float(flop) for flop in args.flops_to_save])
