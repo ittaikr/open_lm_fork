@@ -547,6 +547,7 @@ def main(args):
         params = [p for n, p in named_parameters if p.requires_grad]
         if args.decoupled_wd is not None:
             args.wd = args.decoupled_wd / args.lr
+            logging.info(f"Decoupled weight decay: {args.decoupled_wd} lr: {args.lr} -> wd: {args.wd:.8f}")
         if args.schedulefree:
             optimizer = schedulefree.AdamWScheduleFree(
                 [
