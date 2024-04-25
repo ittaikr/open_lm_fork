@@ -156,10 +156,11 @@ def train_one_epoch(
                         logit_m.update(torch.mean(out).item())
                     local_tuple_loss = (
                         loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
-                        / args.accum_freq
                     )
                     local_loss = local_tuple_loss[1] if args.z_loss_coefficient != 0.0 else local_tuple_loss
+                    local_loss /= args.accum_freq
                     local_zloss = local_tuple_loss[0] if args.z_loss_coefficient != 0.0 else None
+                    local_zloss /= args.accum_freq
                 backward(local_tuple_loss[0] if args.z_loss_coefficient != 0.0 else local_tuple_loss, scaler)
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
@@ -169,8 +170,9 @@ def train_one_epoch(
                             for key, averager in averagers.avgs_dict.items():
                                 with torch.no_grad():
                                     out_avg, _ = averager.av_model(inputs_ii)
-                                    local_tuple_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets_ii.reshape(-1)) / args.accum_freq
+                                    local_tuple_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
                                     local_avg_losses[key] = local_tuple_loss_avg[key][1] if args.z_loss_coefficient != 0.0 else local_tuple_loss_avg[key]
+                                    local_avg_losses[key] /= args.accum_freq
                         if args.schedulefree:
                             model.eval()
                             optimizer.eval()
@@ -317,7 +319,7 @@ def train_one_epoch(
                 curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
                 prev_flops = 6 * step * args.batch_size * args.seq_len * args.world_size * args.params_count
                 if np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) ):
-                    save_checkpoint_step(args, model, curr_flops, epoch, averagers)
+                    save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
                     logging.info(f"Saved model as it reached {curr_flops} FLOPs")
 
 
