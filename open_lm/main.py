@@ -732,7 +732,10 @@ def main(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
     if args.flops_to_save is not None:
-        d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
+        if hasattr(model, "module"):
+            d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
+        else:
+            d_model, num_layers = model.tok_embeddings.embedding_dim, model.n_layers
         args.params_count = float(12 * (d_model**2) * num_layers + args.vocab_size * d_model)
         if is_master(args):
             args.flops_to_save = args.flops_to_save.split(",")
