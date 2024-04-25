@@ -330,7 +330,7 @@ def train_one_epoch(
             losses_m.reset()
             if args.z_loss_coefficient != 0.0:
                 z_losses_m.reset()
-            if averagers is not None:
+            if averagers is not None and log_avg(i, num_batches_per_epoch):
                 for k in averagers.avgs_dict.keys():
                     losses_avg_m[k].reset()
             if args.schedulefree:
