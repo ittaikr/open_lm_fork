@@ -1,5 +1,5 @@
 job_details:
-  name: bs_comparison_RW_decouled_wd
+  name: bs_comparison_RW_decouled_wd_1
   output_dir: exps
   # num_nodes: 1
   # num_gpus: 4
@@ -9,10 +9,10 @@ parameters:
         accum_freq: [1]
         train_num_samples: [5170000] # 5.17M, so x10 = 51.7M
         warmup_tokens: [5170000]
-      - model: ['layers=3_hidden-dim=96']
-        accum_freq: [1]
-        train_num_samples: [517000000] # 51.7M, so x10 = 0.517B (this model with x100 tok. mult.)
-        warmup_tokens: [517000000]
+      # - model: ['layers=3_hidden-dim=96']
+      #   accum_freq: [1]
+      #   train_num_samples: [517000000] # 51.7M, so x10 = 0.517B (this model with x100 tok. mult.)
+      #   warmup_tokens: [517000000]
       - model: ['layers=4_hidden-dim=128']
         accum_freq: [1]
         train_num_samples: [7240000] # 7.24M, so x10 = 72.4M
