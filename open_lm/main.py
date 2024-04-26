@@ -779,13 +779,12 @@ def main(args):
             tb_writer=writer,
             csv_path=csv_path,
         )
-        if should_break is not None:
-            break
 
         completed_epoch = epoch + 1
         if args.world_size > 1:
             dist.barrier()
-
+        if should_break is not None:
+            break
         evaluation_loss = -1
         if "val" in data:
 
