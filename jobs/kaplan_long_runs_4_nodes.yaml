@@ -30,7 +30,6 @@ parameters:
         warmup_tokens: [1572864000, 209715200]
 
     train_num_samples: [130000000] # ~1.3B - x100 epochs = 130B tokens (as in kaplan)
-    warmup_tokens: [1572864000, 13107200] # 1.57B, 13.1M - kaplan warmup tokens and our warmup tokens
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     batch_size: [4] # global batch size is 4*4*4 = 64
