@@ -10,7 +10,7 @@ def clean_exp(dir):
                 # print('rm -r ' + os.path.join(dir, subdir, 'checkpoints'))
 
 def main():
-    dirs_to_clean = [dir for dir in os.listdir('exps') if (os.path.isdir(os.path.join('exps', dir)) and '24-04-26' in dir)]
+    dirs_to_clean = [dir for dir in os.listdir('exps') if (os.path.isdir(os.path.join('exps', dir)) and '24-03-1' in dir)]
     for dir in dirs_to_clean:
         clean_exp(os.path.join('exps', dir))
 
