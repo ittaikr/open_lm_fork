@@ -740,7 +740,7 @@ def main(args):
         else:
             d_model, num_layers = model.tok_embeddings.embedding_dim, model.n_layers
         args.params_count = float(
-            (4 * d_model + 3 * 256 * (((2 * 4 * d_model / 3).astype(int) + 256 - 1) // 256)) * d_model * num_layers + args.vocab_size * d_model
+            (4 * d_model + 3 * 256 * ((int(2 * 4 * d_model / 3) + 256 - 1) // 256)) * d_model * num_layers + args.vocab_size * d_model
             )
         if is_master(args):
             args.flops_to_save = args.flops_to_save.split(",")
