@@ -6,18 +6,30 @@ job_details:
 parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=18_hidden-dim=704']
-        train_num_samples: [521658368] # ~522M - x100 epochs = 52.2B tokens (highest token count)
+        train_num_samples: [581478898] # ~581M - x100 epochs = 58.1B tokens it takes to reach 5.2e+19 flops
+        warmup_tokens: [1572864000, 37261312] # 1.57B, max(13.1M, 0.25*params) - kaplan warmup tokens and our warmup tokens
+
       - model: ['layers=21_hidden-dim=832']
-        train_num_samples: [377291226] # ~377M - x100 epochs = 37.7B tokens it takes to reach 5e+19 flops
+        train_num_samples: [392382875] # ~392M - x100 epochs = 39.2B tokens it takes to reach 5.2e+19 flops
+        warmup_tokens: [1572864000, 55218176]
+
       - model: ['layers=23_hidden-dim=1024']
-        train_num_samples: [240099274] # ~240M - x100 epochs = 24B tokens it takes to reach 5e+19 flops
+        train_num_samples: [249703245] # ~249M - x100 epochs = 24.9B tokens it takes to reach 5.2e+19 flops
+        warmup_tokens: [1572864000, 86769664]
+
       - model: ['layers=26_hidden-dim=1120']
-        train_num_samples: [183024937] # ~183M - x100 epochs = 18.3B tokens it takes to reach 5e+19 flops 
+        train_num_samples: [190345935] # ~190M - x100 epochs = 19B tokens it takes to reach 5.2e+19 flops
+        warmup_tokens: [1572864000, 113827840]
+
       - model: ['layers=26_hidden-dim=1312']
-        train_num_samples: [136174748] # ~136M - x100 epochs = 13.6B tokens it takes to reach 5e+19 flops
+        train_num_samples: [141621738] # ~141M - x100 epochs = 14.1B tokens it takes to reach 5.2e+19 flops
+        warmup_tokens: [1572864000, 152989696]
+
       - model: ['layers=30_hidden-dim=1504']
-        train_num_samples: [92415339] # ~3.2B
-    warmup_tokens: [1572864000, 13107200] # 1.57B, 13.1M - kaplan warmup tokens and our warmup tokens
+        train_num_samples: [96111952] # ~96M - x100 epochs = 9.6B tokens it takes to reach 5.2e+19 flops
+        warmup_tokens: [1572864000, 225431552]
+
+    
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     batch_size: [4] # global batch size is 4*4*4 = 64
@@ -44,7 +56,7 @@ parameters:
     workers: [2]
     accum_freq: [1]
     flops_to_save: ['3.125e+15,6.250e+15,1.250e+16,2.500e+16,5.000e+16,1.000e+17,2.000e+17,4.000e+17,8.000e+17,1.600e+18,3.200e+18,6.400e+18,1.280e+19,2.560e+19,5.120e+19,1.024e+20']
-    max_checkpoints_flops: [6]
+    max_checkpoints_flops: [9]
     train_data: ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00001001..00042512}.tar"]
     # if there are 600B tokens in RW, and all of them are uniformly distributed in the shards, then each shard has 600B/42512 = 14.1M tokens
     # so, keeping 1000 shards for validation, we have 1000*14.1M = 14.1B tokens for validation

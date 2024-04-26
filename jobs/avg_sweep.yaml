@@ -41,7 +41,7 @@ parameters:
     wandb_project_name: ['lm_grid_160m_more_avgs']
     log_avg_model_training_loss: [120] # we have 6 averagers 
     delete_previous_checkpoint: [true]
-    averagers: ['poly_8_1,poly_12_1,poly_16_1,poly_24_1,poly_32_1,poly_48_1']
+    averagers: ['poly_2_1,poly_4_1']
     workers: [2]
     train_data: ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00001001..00042512}.tar"]
     # flops_to_save: ['2.00e+15,4.00e+15,8.00e+15,1.60e+16,3.20e+16,6.40e+16,1.28e+17,2.56e+17,5.12e+17,1.02e+18,2.05e+18,4.10e+18,8.19e+18,1.64e+19,3.28e+19,6.55e+19']

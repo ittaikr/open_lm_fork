@@ -6,17 +6,29 @@ job_details:
 parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=18_hidden-dim=704']
-        max_tokens: [559114325] # in all models, the max tokens is num of tokens to reach 5e+19 flops. here we don't stop after 6/12 hours
+        max_tokens: [58147889872] # in all models, the max tokens is num of tokens to reach 5e+19 flops. here we don't stop after 6/12 hours
+        warmup_tokens: [1572864000, 37261312] # 1.57B, max(13.1M, 0.25*params) - kaplan warmup tokens and our warmup tokens
+
       - model: ['layers=21_hidden-dim=832']
-        max_tokens: [377291226]
+        max_tokens: [39238287528]
+        warmup_tokens: [1572864000, 55218176]
+
       - model: ['layers=23_hidden-dim=1024']
-        max_tokens: [240099274]
+        max_tokens: [24970324498]
+        warmup_tokens: [1572864000, 86769664]
+
       - model: ['layers=26_hidden-dim=1120']
-        max_tokens: [183024937]
+        max_tokens: [19034593529]
+        warmup_tokens: [1572864000, 113827840]
+
       - model: ['layers=26_hidden-dim=1312']
-        max_tokens: [136174748]
+        max_tokens: [14162173815]
+        warmup_tokens: [1572864000, 152989696]
+
       - model: ['layers=30_hidden-dim=1504']
-        max_tokens: [92415339]
+        max_tokens: [9611195272]
+        warmup_tokens: [1572864000, 209715200]
+
     train_num_samples: [130000000] # ~1.3B - x100 epochs = 130B tokens (as in kaplan)
     warmup_tokens: [1572864000, 13107200] # 1.57B, 13.1M - kaplan warmup tokens and our warmup tokens
     dataset_resampled: [false]
@@ -37,14 +49,14 @@ parameters:
     z_loss_coefficient: [0.0001]
     lr_scheduler: ['cosine']
     wd: [0.033]
-    lr: [1.5e-03] # same as constant lr in the rpj config
+    lr: [3.0e-03] # same as constant lr in the rpj config
     epochs: [1000]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
     workers: [2]
     accum_freq: [1]
     flops_to_save: ['3.125e+15,6.250e+15,1.250e+16,2.500e+16,5.000e+16,1.000e+17,2.000e+17,4.000e+17,8.000e+17,1.600e+18,3.200e+18,6.400e+18,1.280e+19,2.560e+19,5.120e+19,1.024e+20']
-    max_checkpoints_flops: [6]
+    max_checkpoints_flops: [9]
     train_data: ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00001001..00042512}.tar"]
     # if there are 600B tokens in RW, and all of them are uniformly distributed in the shards, then each shard has 600B/42512 = 14.1M tokens
     # so, keeping 1000 shards for validation, we have 1000*14.1M = 14.1B tokens for validation
