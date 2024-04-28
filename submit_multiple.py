@@ -206,9 +206,9 @@ if __name__ == '__main__':
         if args.dry_run:
             # print(f'Would now run "{cmd}"')
             if args.rerun:
-                with open(os.path.join(out_dir, 'config.yaml'), 'r') as f:
+                with open(os.path.join(out_dir, 'spec.yaml'), 'r') as f:
                     prev_config = yaml.safe_load(f)
-                print(f'Host of previous failed run: {prev_config["host_name"]}')
+                print(f'Would now rerun {spec_name}')
         else:
             while True:
                 try:
