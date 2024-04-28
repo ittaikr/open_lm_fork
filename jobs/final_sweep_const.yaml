@@ -35,21 +35,9 @@ parameters:
         accum_freq: [1]
       - batch_size: [16]
         accum_freq: [2] # due to memory constraints
-
-    LIST_LR_LR_COOLDOWN_END:
-      - lr: [2.4e-2]
-        lr_cooldown_end: [2.4e-4]
-      - lr: [1.2e-2]
-        lr_cooldown_end: [1.2e-4]
-      - lr: [6.0e-3]
-        lr_cooldown_end: [6.0e-5]
-      - lr: [3.0e-3]
-        lr_cooldown_end: [3.0e-5]
-      - lr: [1.5e-3]
-        lr_cooldown_end: [1.5e-5]
-      - lr: [7.5e-4]
-        lr_cooldown_end: [7.5e-6]
-        
+    
+    lr: [0.00075, 0.0015, 0.003, 0.006, 0.012, 0.024]
+    lr_cooldown_end: [0.0]
     decoupled_wd: [1.0e-4]
     lr_scheduler: ['const']
     averagers: ['poly_08_1'] 
