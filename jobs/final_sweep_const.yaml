@@ -7,23 +7,23 @@ parameters:
     LIST_ACC_BS:
 
       - model: ['layers=3_hidden-dim=96']
-        train_num_samples: [10346496] # 10.34M, so x10 = 103.4M
+        train_num_samples: [10346496]
         warmup_tokens: [10346496]
 
       - model: ['layers=4_hidden-dim=128']
-        train_num_samples: [15007744] # 14.48M, so x10 = 144.8M
+        train_num_samples: [15007744] 
         warmup_tokens: [15007744]
 
       - model: ['layers=6_hidden-dim=224']
-        train_num_samples: [31195136] # 19.22M, so x10 = 192.2M
+        train_num_samples: [31195136]
         warmup_tokens: [31195136]
 
       - model: ['layers=9_hidden-dim=320']
-        train_num_samples: [57344000] # 15.68M, so x10 = 156.8M
+        train_num_samples: [57344000] 
         warmup_tokens: [57344000] 
 
       - model: ['layers=12_hidden-dim=480']
-        train_num_samples: [114769920] # 32.1M, so x10 = 321M
+        train_num_samples: [114769920] 
         warmup_tokens: [114769920]
 
       - model: ['layers=15_hidden-dim=640']
@@ -36,7 +36,20 @@ parameters:
       - batch_size: [16]
         accum_freq: [2] # due to memory constraints
 
-    lr: [0.00075, 0.0015, 0.003, 0.006, 0.012, 0.024]
+    LIS_LR_LR_COOLDOWN_END:
+      - lr: [2.4e-2]
+        lr_cooldown_end: [2.4e-4]
+      - lr: [1.2e-2]
+        lr_cooldown_end: [1.2e-4]
+      - lr: [6.0e-3]
+        lr_cooldown_end: [6.0e-5]
+      - lr: [3.0e-3]
+        lr_cooldown_end: [3.0e-5]
+      - lr: [1.5e-3]
+        lr_cooldown_end: [1.5e-5]
+      - lr: [7.5e-4]
+        lr_cooldown_end: [7.5e-6]
+        
     lr: [0.003]
     decoupled_wd: [1.0e-4]
     lr_scheduler: ['const']
@@ -55,7 +68,7 @@ parameters:
     report_to: ['wandb']
     resume: ['latest']
     data_key: ['json.gz']
-    lr_cooldown_end: [0.0]
+    
     qk_norm: [true]
     z_loss_coefficient: [0.0001]
     # wd: [0.033]
