@@ -1,26 +1,26 @@
 job_details:
-  name: final_sweep_const
+  name: final_sweep_const_extra_1
   output_dir: exps_sweep
   num_nodes: 1
   num_gpus: 4
 parameters:
     LIST_ACC_BS:
 
-      - model: ['layers=3_hidden-dim=96']
-        train_num_samples: [10346496]
-        warmup_tokens: [10346496]
+      # - model: ['layers=3_hidden-dim=96']
+      #   train_num_samples: [10346496]
+      #   warmup_tokens: [10346496]
 
-      - model: ['layers=4_hidden-dim=128']
-        train_num_samples: [15007744] 
-        warmup_tokens: [15007744]
+      # - model: ['layers=4_hidden-dim=128']
+      #   train_num_samples: [15007744] 
+      #   warmup_tokens: [15007744]
 
-      - model: ['layers=6_hidden-dim=224']
-        train_num_samples: [31195136]
-        warmup_tokens: [31195136]
+      # - model: ['layers=6_hidden-dim=224']
+      #   train_num_samples: [31195136]
+      #   warmup_tokens: [31195136]
 
-      - model: ['layers=9_hidden-dim=320']
-        train_num_samples: [57344000] 
-        warmup_tokens: [57344000] 
+      # - model: ['layers=9_hidden-dim=320']
+      #   train_num_samples: [57344000] 
+      #   warmup_tokens: [57344000] 
 
       - model: ['layers=12_hidden-dim=480']
         train_num_samples: [114769920] 
@@ -31,12 +31,12 @@ parameters:
         warmup_tokens: [216924160]
 
     LIST_BS_ACC:
-      - batch_size: [1, 2, 4, 8]
+      - batch_size: [4, 8] #[1, 2, 4, 8]
         accum_freq: [1]
       - batch_size: [16]
         accum_freq: [2] # due to memory constraints
     
-    lr: [0.00075, 0.0015, 0.003, 0.006, 0.012, 0.024]
+    lr: [0.00009375, 0.0001875, 0.000375] #, 0.00075, 0.0015, 0.003, 0.006, 0.012, 0.024]
     lr_cooldown_end: [0.0]
     decoupled_wd: [1.0e-4]
     lr_scheduler: ['const']

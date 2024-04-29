@@ -1,26 +1,26 @@
 job_details:
-  name: final_sweep_cosine
+  name: final_sweep_cosine_extra_1
   output_dir: exps_sweep
   num_nodes: 1
   num_gpus: 4
 parameters:
     LIST_ACC_BS:
 
-      - model: ['layers=3_hidden-dim=96']
-        train_num_samples: [10346496]
-        warmup_tokens: [10346496]
+      # - model: ['layers=3_hidden-dim=96']
+      #   train_num_samples: [10346496]
+      #   warmup_tokens: [10346496]
 
-      - model: ['layers=4_hidden-dim=128']
-        train_num_samples: [15007744] 
-        warmup_tokens: [15007744]
+      # - model: ['layers=4_hidden-dim=128']
+      #   train_num_samples: [15007744] 
+      #   warmup_tokens: [15007744]
 
-      - model: ['layers=6_hidden-dim=224']
-        train_num_samples: [31195136] 
-        warmup_tokens: [31195136]
+      # - model: ['layers=6_hidden-dim=224']
+      #   train_num_samples: [31195136] 
+      #   warmup_tokens: [31195136]
 
-      - model: ['layers=9_hidden-dim=320']
-        train_num_samples: [57344000] 
-        warmup_tokens: [57344000] 
+      # - model: ['layers=9_hidden-dim=320']
+      #   train_num_samples: [57344000] 
+      #   warmup_tokens: [57344000] 
 
       - model: ['layers=12_hidden-dim=480']
         train_num_samples: [114769920] 
@@ -31,20 +31,26 @@ parameters:
         warmup_tokens: [216924160]
 
     accum_freq: [1]
-    batch_size: [1, 2, 4, 8, 16]
+    batch_size: [4, 8, 16]
     LIST_LR_LR_COOLDOWN_END:
-      - lr: [4.8e-2]
-        lr_cooldown_end: [4.8e-4]
-      - lr: [2.4e-2]
-        lr_cooldown_end: [2.4e-4]
-      - lr: [1.2e-2]
-        lr_cooldown_end: [1.2e-4]
-      - lr: [6.0e-3]
-        lr_cooldown_end: [6.0e-5]
-      - lr: [3.0e-3]
-        lr_cooldown_end: [3.0e-5]
-      - lr: [1.5e-3]
-        lr_cooldown_end: [1.5e-5]
+      # - lr: [4.8e-2]
+      #   lr_cooldown_end: [4.8e-4]
+      # - lr: [2.4e-2]
+      #   lr_cooldown_end: [2.4e-4]
+      # - lr: [1.2e-2]
+      #   lr_cooldown_end: [1.2e-4]
+      # - lr: [6.0e-3]
+      #   lr_cooldown_end: [6.0e-5]
+      # - lr: [3.0e-3]
+      #   lr_cooldown_end: [3.0e-5]
+      # - lr: [1.5e-3]
+      #   lr_cooldown_end: [1.5e-5]
+      - lr: [7.5e-4]
+        lr_cooldown_end: [7.5e-6]
+      - lr: [3.75e-4]
+        lr_cooldown_end: [3.75e-6]
+      - lr: [1.875e-4]
+        lr_cooldown_end: [1.875e-6]
     decoupled_wd: [1.0e-4]
     lr_scheduler: ['cosine']
     # warmup: [200]
