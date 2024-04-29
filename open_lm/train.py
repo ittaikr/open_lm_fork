@@ -265,9 +265,7 @@ def train_one_epoch(
                 save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
                 logging.info(f"Saved model as it reached {curr_flops} FLOPs")
         
-        if is_master(args) and args.max_tokens is not None:
-            if (step + 1) * args.batch_size * args.seq_len * args.world_size >= args.max_tokens:
-                return "max tokens reached"
+        
 
         if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
             batch_size = len(inputs)
@@ -360,7 +358,7 @@ def evaluate(model, data, start_epoch, args, writer):
     dataloader = data["val"].dataloader
     num_batches_per_epoch = dataloader.num_batches
     sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
-
+    metrics = {}
     losses_m = AverageMeter()
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
@@ -383,6 +381,26 @@ def evaluate(model, data, start_epoch, args, writer):
         batch_time_m.update(time.time() - end)
         sps_m.update(inputs.numel() * args.world_size / batch_time_m.val)
         spspg_m.update(inputs.numel() / batch_time_m.val)
+        end = time.time()
+        if i % args.log_eval_loss == 0 and is_master(args):
+            logging.info(
+                f"Validation: [{i}/{num_batches_per_epoch}] "
+                f"Loss: {losses_m.avg:.3f} "
+                f"Data (t): {data_time_m.avg:.3f} "
+                f"Batch (t): {batch_time_m.avg:.3f}, {sps_m.avg:#g}/s, {spspg_m.avg:#g}/s/gpu "
+            )
+            if i == 0:
+                metrics["loss"] = [losses_m.avg]
+                metrics["tokens"] = [(i + 1) * args.batch_size * args.seq_len]
+            else:
+                metrics["loss"].append(losses_m.avg)
+                metrics["tokens"].append((i + 1) * args.batch_size * args.seq_len)
+            # reset
+            batch_time_m.reset()
+            data_time_m.reset()
+            losses_m.reset()
+            sps_m.reset()
+            spspg_m.reset()
     print('final step is', i, 'so num of tokens in validation set is', (i + 1) * args.batch_size * args.seq_len * args.world_size)
     # Save eval loss / etc.
     log_data = {
@@ -403,4 +421,4 @@ def evaluate(model, data, start_epoch, args, writer):
             wandb.log({name: val, "epoch": start_epoch, "tokens": log_data["tokens"]})
     if is_master(args):
         print(f"evaluation perplexity: {math.exp(losses_m.avg)}")
-    return log_data
+    return metrics

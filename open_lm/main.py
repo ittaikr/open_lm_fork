@@ -745,6 +745,9 @@ def main(args):
         if is_master(args):
             args.flops_to_save = args.flops_to_save.split(",")
             args.flops_to_save = np.array([float(flop) for flop in args.flops_to_save])
+
+    should_break = False
+
     for epoch in range(start_epoch, args.epochs):
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
@@ -766,7 +769,7 @@ def main(args):
         
         if args.world_size > 1:
             dist.barrier()
-        should_break = train_one_epoch(
+        train_one_epoch(
             model,
             data,
             loss,
@@ -783,8 +786,6 @@ def main(args):
         completed_epoch = epoch + 1
         if args.world_size > 1:
             dist.barrier()
-        if should_break is not None:
-            break
         evaluation_loss = -1
         if "val" in data:
 
@@ -812,6 +813,14 @@ def main(args):
                     if args.save_logs and args.csv_log and is_master(args):
                         with open(csv_path_eval, "a") as f:
                             f.write(",".join([str(v) for v in metrics.values()]) + "\n")
+
+        if args.max_tokens is not None:
+            tokens_seen = (data["train"].dataloader.num_batches) * (epoch + 1) * args.batch_size * args.seq_len * args.world_size
+            if tokens_seen >= args.max_tokens:
+                should_break = True
+                logging.info(f"Reached max tokens {args.max_tokens}, stopping training.")
+        if should_break:
+            break
 
         # 613 - 610 at halfway
         # Saving checkpoints.
