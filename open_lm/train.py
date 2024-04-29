@@ -383,7 +383,7 @@ def evaluate(model, data, start_epoch, args, writer):
         batch_time_m.update(time.time() - end)
         sps_m.update(inputs.numel() * args.world_size / batch_time_m.val)
         spspg_m.update(inputs.numel() / batch_time_m.val)
-    print('final step is', i, ' so num of tokens in validation set is', (i + 1) * args.batch_size * args.seq_len * args.world_size)
+    print('final step is', i, 'so num of tokens in validation set is', (i + 1) * args.batch_size * args.seq_len * args.world_size)
     # Save eval loss / etc.
     log_data = {
         "loss": losses_m.avg,
