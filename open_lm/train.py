@@ -373,11 +373,12 @@ def evaluate(model, data, start_epoch, args, writer):
         data_time_m.update(time.time() - end)
 
         with autocast():
-            inputs = texts[:, : args.seq_len - 1]
-            targets = texts[:, 1 : args.seq_len]
-            out, _ = model(inputs)
-            total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
-            losses_m.update(total_loss.item(), inputs.shape[0])
+            with torch.no_grad():
+                inputs = texts[:, : args.seq_len - 1]
+                targets = texts[:, 1 : args.seq_len]
+                out, _ = model(inputs)
+                total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                losses_m.update(total_loss.item(), inputs.shape[0])
         batch_time_m.update(time.time() - end)
         sps_m.update(inputs.numel() * args.world_size / batch_time_m.val)
         spspg_m.update(inputs.numel() / batch_time_m.val)

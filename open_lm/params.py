@@ -418,6 +418,11 @@ def parse_args(args):
         default=0,
         help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps."
     )
+    parser.add_argument("--log-eval-loss",
+        type=int,
+        default=100,
+        help="Whether to log the evaluation loss. if not 0, it will log the loss over the specified number of steps."
+    )
     # log_avg_model_training_loss
     # args_config, remaining = config_parser.parse_known_args()
     args = parser.parse_args()

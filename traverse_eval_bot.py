@@ -16,17 +16,20 @@ import re
 
 def parse_resume_path(resume_path):
     # resume_path is flop_1.25e+16_step_2118_poly_08_1.pt or flop_1.25e+16_step_2118.pt
-    # we need to extract the flop and step values, and averager (which is poly_08_1 in this case)
-    # we can use the following regex to extract the values
-    # flop_(\d+\.?\d*)e\+(\d+)_step_(\d+)_([a-zA-Z0-9_]+).pt
+    # we need to extract the flop and step values, and averager (which is poly_08_1 in the first case)
+    # do that with splitting the string by _ and then parsing the values
+
+    # get the averager part, if it exists
+    if "poly" in resume_path:
+        averager = resume_path.split("_")[-3] + "_" + resume_path.split("_")[-2] + "_" + resume_path.split("_")[-1].split(".")[0]
+    else:
+        averager = None
     
-    regex = r"flop_(\d+\.?\d*)e\+(\d+)_step_(\d+)_([a-zA-Z0-9_]+).pt"
-    match = re.match(regex, resume_path)
-    if match:
-        flop = float(match.group(1) + "e" + match.group(2))
-        step = int(match.group(3))
-        averager = match.group(4) if match.group(4) else None
-        return flop, step, averager
+    # get the flop and step values
+    flop = resume_path.split("_")[1]
+    step = resume_path.split("_")[3] if averager else resume_path.split("_")[3].split(".")[0]
+
+    return float(flop), int(step), averager
 
 
 
@@ -36,9 +39,9 @@ def eval_ckpt(args, ckpt_path):
     # checkpoint path without parent directory
     checkpoint_path_name = Path(args.resume).name
     args.train_data = None
-    args.valid_data = ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00000001..00000010}.tar"] # ~141M tokens
+    args.val_data = ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00000001..00000010}.tar"] # ~141M tokens
     args.batch_size = 16
-    args.log_eval_loss = 100
+    args.log_eval_loss = 50
 
     model = create_model(args)
     device = init_distributed_device(args)
@@ -69,11 +72,11 @@ def eval_ckpt(args, ckpt_path):
 
 def get_args(exp_path):
     parser = argparse.ArgumentParser(description='Eval Config', add_help=False)
-    for sub_dir in os.listdir(exp_path):
-        sub_dir_path = os.path.join(exp_path, sub_dir)
-        if "args" in sub_dir_path:
+    for file in os.listdir(exp_path):
+        file_path = os.path.join(exp_path, file)
+        if "args" in file_path:
             args = parser.parse_args()
-            with open(sub_dir_path, 'r') as f:
+            with open(file_path, 'r') as f:
                 cfg = yaml.safe_load(f)
                 # Override argparse defaults with config file
                 for key, value in cfg.items():
@@ -83,7 +86,7 @@ def get_args(exp_path):
 def traverse(base_path):
     for exp in os.listdir(base_path):
         exp_path = os.path.join(base_path, exp)
-        if not os.path.isdir(exp_path):
+        if not os.path.isdir(exp_path): # skip job.yaml file
             continue
 
         args = get_args(exp_path)
@@ -95,23 +98,30 @@ def traverse(base_path):
             # that means that sub_dir is the checkpoint directory
             for ckpt in os.listdir(sub_dir_path):
                 ckpt_path = os.path.join(sub_dir_path, ckpt)
-                if "flop" not in ckpt_path:
+                if "flop" not in ckpt_path: # for now evaluate only the checkpoints that have flop in their name
                     continue
-                # eval_in_progress_path would be exps_sweep/24-04-28-final_sweep_cosine/000_24-04-28-final_sweep_cosine+bat_siz=1+mod=layers=15_hidden-dim=640+tra_num_sam=216924160+war_tok=216924160+lr=0.048+lr_coo_end=0.00048/checkpoints/epoch_10_eval_in_progress
+                
                 eval_in_progress_path = ckpt_path + "_eval_in_progress"
-                result_path = ckpt_path + "_eval_result.jsonl"
+                result_path = os.path.join(os.path.join(exp_path, "eval_results"), ckpt_path + "_eval_result.jsonl")
 
-                # wait for a random number of seconds,1 uniform between 0.5 and 2
-                time.sleep(random.uniform(0.5, 2))
+                to_wait = random.uniform(0.5, 2)
+                print(f"Waiting for {to_wait} seconds")
+                time.sleep(to_wait)
 
+                # continue if evaluation is in progress
+                # that is, if eval_in_progress file exists for less then 4 hours or result file exists
+                skip = False
                 if os.path.exists(eval_in_progress_path):
-                    print(f"Skipping {ckpt_path} as evaluation is in progress")
-                    continue
+                    if (time.time() - os.path.getmtime(eval_in_progress_path)) < 4 * 60 * 60:
+                        print(f"Skipping {ckpt_path} as evaluation is in progress")
+                        skip = True
                 
                 if os.path.exists(result_path):
                     print(f"Skipping {ckpt_path} as evaluation is already done")
+                    skip = True
+                    
+                if skip:
                     continue
-                
                 # create eval_in_progress file
                 with open(eval_in_progress_path, 'w') as f:
                     f.write("")
