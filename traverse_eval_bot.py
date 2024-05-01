@@ -39,7 +39,10 @@ def eval_ckpt(args, ckpt_path):
     # checkpoint path without parent directory
     checkpoint_path_name = Path(args.resume).name
     args.train_data = None
-    args.val_data = ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00000001..00000010}.tar"] # ~141M tokens
+    if args.data_key == "json.gz":
+        args.val_data = ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00000001..00000010}.tar"] # ~141M tokens
+    elif args.data_key == "json":
+        args.val_data = ["/p/fastdata/mmlaion/lmdata/rpj/shard_{00000000..00000003}.tar"]
     args.batch_size = 16
     args.log_eval_loss = 50
     args.wandb = False
@@ -93,8 +96,12 @@ def traverse(base_path):
             continue
         if '30-' in exp:
             continue
-        args = get_args(exp_path)
-
+        try:
+            args = get_args(exp_path)
+        except:
+            continue
+        if 'rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0' in args.train_data[0]:
+            continue
         for sub_dir in os.listdir(exp_path):     
             sub_dir_path = os.path.join(exp_path, sub_dir)
             if not os.path.isdir(sub_dir_path) or 'results' in sub_dir_path:
@@ -142,7 +149,12 @@ def traverse(base_path):
 if __name__ == "__main__":
     flop_dir_to_traverse = "exps_final_runs"
     sweep_dir = "exps_sweep"
+    original_dir = "exps"
     while True:
+        dirs_to_traverse = [os.path.join(original_dir, exp) for exp in os.listdir(original_dir) if os.path.isdir(os.path.join(original_dir, exp))]
+        for dir in dirs_to_traverse:
+            traverse(dir)
+
         dirs_to_traverse = [os.path.join(sweep_dir, exp) for exp in os.listdir(sweep_dir) if os.path.isdir(os.path.join(sweep_dir, exp))]
         for dir in dirs_to_traverse:
             traverse(dir)
