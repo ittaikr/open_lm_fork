@@ -136,6 +136,10 @@ def load_model(args, model, averagers=None):
                 logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
+        if "av_model_sd" in checkpoint:
+            print("loading av_model_sd")
+            checkpoint = checkpoint["av_model_sd"]
+        start_epoch = 0
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch

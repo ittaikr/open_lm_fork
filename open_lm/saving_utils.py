@@ -42,6 +42,6 @@ def save_checkpoint_step(args, model, completed_flop, epoch, averagers, current_
                 "step": current_step,
             }
             torch.save(
-                averagers.avgs_dict[k].get_state_dict_avg(),
+                checkpoint_dict_model,
                 os.path.join(args.checkpoint_path, f"flop_{completed_flop:.2e}_step_{current_step}_{k}.pt"),
             )
