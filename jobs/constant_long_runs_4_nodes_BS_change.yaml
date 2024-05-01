@@ -2,43 +2,43 @@ job_details:
   name: const_long_runs_4_nodes_BS_change
   output_dir: exps_final_runs
   num_gpus: 4
-  num_nodes: 4
+  num_nodes: 8
 parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=18_hidden-dim=704']
         train_num_samples: [290739449] 
         warmup_tokens: [37261312] 
-        accum_freq: [2]
+        accum_freq: [1]
 
       - model: ['layers=21_hidden-dim=832']
         train_num_samples: [196191437]
         warmup_tokens: [55218176]
-        accum_freq: [2]
+        accum_freq: [1]
 
       - model: ['layers=23_hidden-dim=1024']
         train_num_samples: [124851622] 
         warmup_tokens: [86769664]
-        accum_freq: [2]
+        accum_freq: [1]
 
       - model: ['layers=26_hidden-dim=1120']
         train_num_samples: [95172967] 
         warmup_tokens: [113827840]
-        accum_freq: [4]
+        accum_freq: [2]
 
       - model: ['layers=26_hidden-dim=1312']
         train_num_samples: [70810869] 
         warmup_tokens: [152989696]
-        accum_freq: [4]
+        accum_freq: [2]
 
       - model: ['layers=30_hidden-dim=1504']
         train_num_samples: [96111952] 
         warmup_tokens: [48055976]
-        accum_freq: [4]
+        accum_freq: [2]
 
     
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
-    batch_size: [16] # global batch size is 4*4*16 = 256
+    batch_size: [8] # global batch size is 4*4*16 = 256
     grad_checkpointing: [true]
     log_every_n_steps: [20]
     csv_log: [true]
