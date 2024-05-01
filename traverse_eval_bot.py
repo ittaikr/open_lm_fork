@@ -42,7 +42,7 @@ def eval_ckpt(args, ckpt_path):
     args.val_data = ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00000001..00000010}.tar"] # ~141M tokens
     args.batch_size = 16
     args.log_eval_loss = 50
-
+    args.wandb = False
     model = create_model(args)
     device = init_distributed_device(args)
     model = model.to(device)
@@ -59,8 +59,11 @@ def eval_ckpt(args, ckpt_path):
     metrics["checkpoint_path"] = args.resume
     metrics["val_data"] = args.val_data
     metrics["model"] = args.model
-    metrics["flop"], metrics["step"], metrics["averager"] = parse_resume_path(checkpoint_path_name)
-
+    if 'flop' in args.resume:
+        metrics["flop"], metrics["step"], metrics["averager"] = parse_resume_path(checkpoint_path_name)
+    else:
+        metrics["epoch"] = args.resume.split("_")[-1].split(".")[0]
+        metrics["averager"] = None if "poly" not in args.resume else args.resume.split("_")[-3] + "_" + args.resume.split("_")[-2] + "_" + args.resume.split("_")[-1].split(".")[0]
     path_dir_to_save = os.path.join(Path(checkpoint_root).parent, "eval_results")
     if not os.path.exists(path_dir_to_save):
         os.makedirs(path_dir_to_save)
@@ -88,36 +91,36 @@ def traverse(base_path):
         exp_path = os.path.join(base_path, exp)
         if not os.path.isdir(exp_path): # skip job.yaml file
             continue
-
+        if '30-' in exp:
+            continue
         args = get_args(exp_path)
 
         for sub_dir in os.listdir(exp_path):     
             sub_dir_path = os.path.join(exp_path, sub_dir)
-            if not os.path.isdir(sub_dir_path):
+            if not os.path.isdir(sub_dir_path) or 'results' in sub_dir_path:
                 continue
             # that means that sub_dir is the checkpoint directory
             for ckpt in os.listdir(sub_dir_path):
                 ckpt_path = os.path.join(sub_dir_path, ckpt)
-                if "flop" not in ckpt_path: # for now evaluate only the checkpoints that have flop in their name
+                if "optimizer" in ckpt_path: # for now evaluate only the checkpoints that have flop in their name
+                    continue
+
+                if "eval_in_progress" in ckpt_path:
                     continue
                 
                 eval_in_progress_path = ckpt_path + "_eval_in_progress"
-                result_path = os.path.join(os.path.join(exp_path, "eval_results"), ckpt_path + "_eval_result.jsonl")
+                result_path = os.path.join(os.path.join(exp_path, "eval_results"), ckpt + "_eval_result.jsonl")
 
-                to_wait = random.uniform(0.5, 2)
-                print(f"Waiting for {to_wait} seconds")
-                time.sleep(to_wait)
+                time.sleep(random.uniform(0.5, 2))
 
                 # continue if evaluation is in progress
                 # that is, if eval_in_progress file exists for less then 4 hours or result file exists
                 skip = False
                 if os.path.exists(eval_in_progress_path):
                     if (time.time() - os.path.getmtime(eval_in_progress_path)) < 4 * 60 * 60:
-                        print(f"Skipping {ckpt_path} as evaluation is in progress")
                         skip = True
                 
                 if os.path.exists(result_path):
-                    print(f"Skipping {ckpt_path} as evaluation is already done")
                     skip = True
                     
                 if skip:
@@ -127,21 +130,22 @@ def traverse(base_path):
                     f.write("")
                 try:
                     print(f"Starting evaluation for {ckpt_path}")
-                    # eval_ckpt(args, ckpt_path)
+                    eval_ckpt(args, ckpt_path)
                     os.remove(eval_in_progress_path)
                 except Exception as e:
                     print(f"Error in evaluating {ckpt_path}")
                     print(e)
                     os.remove(eval_in_progress_path)
                     continue
-                
-                # eval_ckpt(args, ckpt_path)
-                print(f"Starting evaluation for {ckpt_path}")
-                # return
 
 
 if __name__ == "__main__":
+    flop_dir_to_traverse = "exps_final_runs"
+    sweep_dir = "exps_sweep"
     while True:
-        dirs_to_traverse = [os.path.join("exps_final_runs", exp) for exp in os.listdir("exps_final_runs") if os.path.isdir(os.path.join("exps_final_runs", exp))]
+        dirs_to_traverse = [os.path.join(sweep_dir, exp) for exp in os.listdir(sweep_dir) if os.path.isdir(os.path.join(sweep_dir, exp))]
+        for dir in dirs_to_traverse:
+            traverse(dir)
+        dirs_to_traverse = [os.path.join(flop_dir_to_traverse, exp) for exp in os.listdir(flop_dir_to_traverse) if os.path.isdir(os.path.join(flop_dir_to_traverse, exp))]
         for dir in dirs_to_traverse:
             traverse(dir)
