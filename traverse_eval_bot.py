@@ -155,10 +155,6 @@ if __name__ == "__main__":
     sweep_dir = "exps_sweep"
     original_dir = "exps"
     while True:
-        # dirs_to_traverse = [os.path.join(original_dir, exp) for exp in os.listdir(original_dir) if os.path.isdir(os.path.join(original_dir, exp))]
-        # for dir in dirs_to_traverse:
-        #     traverse(dir)
-        # print("Finished original")
         dirs_to_traverse = [os.path.join(flop_dir_to_traverse, exp) for exp in os.listdir(flop_dir_to_traverse) if os.path.isdir(os.path.join(flop_dir_to_traverse, exp))]
         for dir in dirs_to_traverse:
             traverse(dir, skip_not_flop=True)
@@ -167,4 +163,8 @@ if __name__ == "__main__":
         for dir in dirs_to_traverse:
             traverse(dir)
         print("Finished sweep")
+        dirs_to_traverse = [os.path.join(original_dir, exp) for exp in os.listdir(original_dir) if os.path.isdir(os.path.join(original_dir, exp))]
+        for dir in dirs_to_traverse:
+            traverse(dir)
+        print("Finished original")
         
