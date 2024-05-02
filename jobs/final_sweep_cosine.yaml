@@ -1,44 +1,28 @@
 job_details:
-  name: final_sweep_cosine_extra_3
+  name: final_sweep_cosine_extra_4
   output_dir: exps_sweep
   num_nodes: 4
   num_gpus: 4
 parameters:
     LIST_ACC_BS:
 
-      - model: ['layers=9_hidden-dim=320']
-        train_num_samples: [57344000] 
-        warmup_tokens: [57344000]
-        batch_size: [8]
-
-      - model: ['layers=12_hidden-dim=480']
-        train_num_samples: [114769920] 
-        warmup_tokens: [114769920]
-        batch_size: [8, 16]
-
-      - model: ['layers=15_hidden-dim=640']
-        train_num_samples: [216924160] 
-        warmup_tokens: [216924160]
-        batch_size: [8, 16]
-
       - model: ['layers=21_hidden-dim=832']
         train_num_samples: [441745408] 
         warmup_tokens: [441745408]
-        batch_size: [16]
-        
+        LIST_BS_LR:
+          - batch_size: [4] # global batch size = 4*4*4 = 64
+            lr: [7.5e-4]
+            lr_cooldown_end: [7.5e-6]
+          - batch_size: [2] # global batch size = 4*4*2 = 32
+            LIST_LR_LR_COOLDOWN_END:
+              - lr: [7.5e-4]
+                lr_cooldown_end: [7.5e-6]
+              - lr: [3.75e-4]
+                lr_cooldown_end: [3.75e-6]
+
+
     accum_freq: [1]
     
-    LIST_LR_LR_COOLDOWN_END:
-      - lr: [2.4e-2]
-        lr_cooldown_end: [2.4e-4]
-      - lr: [1.2e-2]
-        lr_cooldown_end: [1.2e-4]
-      - lr: [6.0e-3]
-        lr_cooldown_end: [6.0e-5]
-      - lr: [3.0e-3]
-        lr_cooldown_end: [3.0e-5]
-      - lr: [1.5e-3]
-        lr_cooldown_end: [1.5e-5]
     decoupled_wd: [1.0e-4]
     lr_scheduler: ['cosine']
     # warmup: [200]
