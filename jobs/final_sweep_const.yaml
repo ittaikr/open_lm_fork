@@ -1,27 +1,48 @@
 job_details:
-  name: final_sweep_const_extra_4
+  name: final_sweep_const_beta2
   output_dir: exps_sweep
-  num_nodes: 4
+  num_nodes: 1
   num_gpus: 4
 parameters:
     LIST_ACC_BS:
 
-      - model: ['layers=21_hidden-dim=832']
-        train_num_samples: [441745408] 
-        warmup_tokens: [441745408]
-        LIST_BS_LR:
-          - batch_size: [4]
-            lr: [0.000375]
-          - batch_size: [2]
-            lr: [0.000375, 0.0001875]
-        batch_size: [2, 4] # global batch size = 4*4*2 or 4*4*4 = 32 or 64
+      - model: ['layers=3_hidden-dim=96']
+        train_num_samples: [10346496] # 10.34M, so x10 = 103.4M
+        warmup_tokens: [10346496]
 
-    accum_freq: [1]
-    lr_cooldown_end: [0.0]
+      - model: ['layers=4_hidden-dim=128']
+        train_num_samples: [15007744] # 14.48M, so x10 = 144.8M
+        warmup_tokens: [15007744]
+
+      - model: ['layers=6_hidden-dim=224']
+        train_num_samples: [31195136] # 19.22M, so x10 = 192.2M
+        warmup_tokens: [31195136]
+
+      - model: ['layers=9_hidden-dim=320']
+        train_num_samples: [57344000] # 15.68M, so x10 = 156.8M
+        warmup_tokens: [57344000] 
+
+      - model: ['layers=12_hidden-dim=480']
+        train_num_samples: [114769920] # 32.1M, so x10 = 321M
+        warmup_tokens: [114769920]
+
+      - model: ['layers=15_hidden-dim=640']
+        train_num_samples: [216924160] 
+        warmup_tokens: [216924160]
+
+    LIST_BS_ACC:
+      - batch_size: [1, 2, 4, 8]
+        accum_freq: [1]
+      - batch_size: [16]
+        accum_freq: [2] # due to memory constraints
+
+    lr: [0.00075, 0.0015, 0.003, 0.006, 0.012, 0.024]
+    lr: [0.003]
     decoupled_wd: [1.0e-4]
     lr_scheduler: ['const']
     averagers: ['poly_08_1'] 
     log_avg_model_training_loss: [20] 
+    # warmup: [200]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     grad_checkpointing: [true]
@@ -29,12 +50,12 @@ parameters:
     csv_log: [true]
     grad_clip_norm: [1]
     beta1: [0.9]
-    beta2: [0.95]
+    beta2: [0.99, 0.999]
     eps: [1.0e-08]
     report_to: ['wandb']
     resume: ['latest']
     data_key: ['json.gz']
-    
+    lr_cooldown_end: [0.0]
     qk_norm: [true]
     z_loss_coefficient: [0.0001]
     # wd: [0.033]
