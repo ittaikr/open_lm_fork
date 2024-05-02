@@ -89,7 +89,7 @@ def get_args(exp_path):
                     setattr(args, key, value)
             return args
 
-def traverse(base_path):
+def traverse(base_path, skip_not_flop=False):
     for exp in os.listdir(base_path):
         exp_path = os.path.join(base_path, exp)
         if not os.path.isdir(exp_path): # skip job.yaml file
@@ -98,9 +98,10 @@ def traverse(base_path):
             continue
         try:
             args = get_args(exp_path)
+            is_other_shards = 'rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0' in args.train_data[0]
         except:
             continue
-        if 'rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0' in args.train_data[0]:
+        if is_other_shards:
             continue
         for sub_dir in os.listdir(exp_path):     
             sub_dir_path = os.path.join(exp_path, sub_dir)
@@ -113,6 +114,9 @@ def traverse(base_path):
                     continue
 
                 if "eval_in_progress" in ckpt_path:
+                    continue
+
+                if skip_not_flop and "flop" not in ckpt_path:
                     continue
                 
                 eval_in_progress_path = ckpt_path + "_eval_in_progress"
@@ -151,13 +155,16 @@ if __name__ == "__main__":
     sweep_dir = "exps_sweep"
     original_dir = "exps"
     while True:
-        dirs_to_traverse = [os.path.join(original_dir, exp) for exp in os.listdir(original_dir) if os.path.isdir(os.path.join(original_dir, exp))]
+        # dirs_to_traverse = [os.path.join(original_dir, exp) for exp in os.listdir(original_dir) if os.path.isdir(os.path.join(original_dir, exp))]
+        # for dir in dirs_to_traverse:
+        #     traverse(dir)
+        # print("Finished original")
+        dirs_to_traverse = [os.path.join(flop_dir_to_traverse, exp) for exp in os.listdir(flop_dir_to_traverse) if os.path.isdir(os.path.join(flop_dir_to_traverse, exp))]
         for dir in dirs_to_traverse:
-            traverse(dir)
-
+            traverse(dir, skip_not_flop=True)
+        print("Finished flop")
         dirs_to_traverse = [os.path.join(sweep_dir, exp) for exp in os.listdir(sweep_dir) if os.path.isdir(os.path.join(sweep_dir, exp))]
         for dir in dirs_to_traverse:
             traverse(dir)
-        dirs_to_traverse = [os.path.join(flop_dir_to_traverse, exp) for exp in os.listdir(flop_dir_to_traverse) if os.path.isdir(os.path.join(flop_dir_to_traverse, exp))]
-        for dir in dirs_to_traverse:
-            traverse(dir)
+        print("Finished sweep")
+        

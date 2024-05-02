@@ -48,7 +48,7 @@ def check_if_evals_done(base_path):
     # otherwise, return False
     is_eval_results_subdir = ['eval_results' in subdir_path for subdir_path in os.listdir(base_path)]
     if not any(is_eval_results_subdir):
-        print("no eval_results")
+        # print("no eval_results")
         return -1
     for subdir in os.listdir(base_path):
         if not os.path.isdir(os.path.join(base_path, subdir)):
@@ -66,6 +66,7 @@ def check_if_evals_done(base_path):
             return len(flop_files) - len(jsonl_files)
 
 def preform_evals(exps_path):
+    not_done_count = 0
     for subdir in os.listdir(exps_path):
         subdir_path = os.path.join(exps_path, subdir)
         if '30-' in subdir or not os.path.isdir(subdir_path):
@@ -76,10 +77,11 @@ def preform_evals(exps_path):
             subsubdir_path = os.path.join(subdir_path, subsubdir)
             not_done = check_if_evals_done(subsubdir_path)
             if not_done:
-                print(subsubdir, not_done)
+                # print(subsubdir, not_done)
+                not_done_count += 1
             else:
                 parse_evals(subsubdir_path)
-
+    print("not done count:", not_done_count)
 
 def main():
     # exps_path = 'exps_final_runs'
