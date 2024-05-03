@@ -18,7 +18,7 @@ def parse_evals(base_path):
         if not 'eval_results' in subdir_path:
             continue
         for file in os.listdir(subdir_path):
-            if not file.endswith('.jsonl'):
+            if not file.endswith('.jsonl') or '_10' not in file:
                 continue
             file_path = os.path.join(subdir_path, file)
             dict_to_add = {}
@@ -27,13 +27,16 @@ def parse_evals(base_path):
                 if len(lines) == 0:
                     continue
                 dict_to_add = json.loads(lines[0])
+                # if int(dict_to_add['epoch']) != 10:
+                #     continue
                 if 'loss' in dict_to_add:
                     dict_to_add['loss_std'] = np.array(dict_to_add['loss']).std()
                     dict_to_add['loss'] = np.array(dict_to_add['loss']).mean()
                     
                 dict_to_add['tokens'] = max(dict_to_add['tokens'])
                 evals.append(dict_to_add)
-    
+    if len(evals) == 0:
+        return
     # write the evals list to a csv file called 'summary_eval.csv' in the base_path directory
     with open(os.path.join(base_path, 'summary_eval.csv'), 'w') as f:
         writer = csv.DictWriter(f, fieldnames=evals[0].keys())
@@ -47,18 +50,21 @@ def check_if_evals_done(base_path):
     # if the number of jsonl files is equal to the number of 'flop' files, return True
     # otherwise, return False
     is_eval_results_subdir = ['eval_results' in subdir_path for subdir_path in os.listdir(base_path)]
+    is_checkpoints_subdir = ['checkpoints' in subdir_path for subdir_path in os.listdir(base_path)]
     if not any(is_eval_results_subdir):
         # print("no eval_results")
         return "no eval_results"
+    if not any(is_checkpoints_subdir):
+        return "no checkpoints"
     for subdir in os.listdir(base_path):
         if not os.path.isdir(os.path.join(base_path, subdir)):
             continue
         if 'checkpoints' in subdir:
             continue
         subdir_path = os.path.join(base_path, subdir)
-        jsonl_files = [file for file in os.listdir(subdir_path) if file.endswith('.jsonl')]
+        jsonl_files = [file for file in os.listdir(subdir_path) if file.endswith('.jsonl') and 'epoch_10' in file]
         checkpoints_path = os.path.join(base_path, 'checkpoints')
-        flop_files = [file for file in os.listdir(checkpoints_path) if 'progress' not in file and 'optimizer' not in file and 'epoch' not in file and '1_100.pt' not in file]
+        flop_files = [file for file in os.listdir(checkpoints_path) if 'progress' not in file and 'optimizer' not in file]
         if len(jsonl_files) == len(flop_files):
             return 0
         else:
@@ -79,15 +85,15 @@ def preform_evals(exps_path):
             if not_done and not_done != "no eval_results":
                 # print(subsubdir, not_done)
                 not_done_count += 1
-            elif not_done != "no eval_results":
+            elif not_done != "no eval_results" and not_done != "no checkpoints":
                 parse_evals(subsubdir_path)
     print("not done count:", not_done_count)
 
 def main():
-    exps_path = 'exps_final_runs'
-    preform_evals(exps_path)
-    # sweep_path = 'exps_sweep'
-    # preform_evals(sweep_path)
+    # exps_path = 'exps_final_runs'
+    # preform_evals(exps_path)
+    sweep_path = 'exps_sweep'
+    preform_evals(sweep_path)
     
 if __name__ == '__main__':
     main()
