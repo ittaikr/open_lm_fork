@@ -37,7 +37,6 @@ parameters:
         accum_freq: [2] # due to memory constraints
 
     lr: [0.00075, 0.0015, 0.003, 0.006, 0.012, 0.024]
-    lr: [0.003]
     decoupled_wd: [1.0e-4]
     lr_scheduler: ['const']
     averagers: ['poly_08_1'] 
