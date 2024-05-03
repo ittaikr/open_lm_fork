@@ -113,7 +113,7 @@ def traverse(base_path, skip_not_flop=False):
                 if "optimizer" in ckpt_path: # for now evaluate only the checkpoints that have flop in their name
                     continue
 
-                if "eval_in_progress" in ckpt_path:
+                if "eval_in_progress" in ckpt_path or "results.jsonl" in ckpt_path:
                     continue
 
                 if skip_not_flop and "flop" not in ckpt_path:
