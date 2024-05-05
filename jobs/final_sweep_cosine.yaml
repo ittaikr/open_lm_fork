@@ -1,15 +1,24 @@
 job_details:
-  name: final_sweep_cosine_beta2_220M
+  name: final_sweep_cosine_extra_5
   output_dir: exps_sweep
   num_nodes: 4
   num_gpus: 4
 parameters:
-    model: ['layers=21_hidden-dim=832']
-    train_num_samples: [441745408] 
-    warmup_tokens: [441745408]
+    LIST_MODELS:
+      - model: ['layers=21_hidden-dim=832']
+        train_num_samples: [441745408] 
+        warmup_tokens: [441745408]
+      - model: ['layers=15_hidden-dim=640']
+        train_num_samples: [216924160] 
+        warmup_tokens: [216924160]
 
-    batch_size: [1, 2, 4, 8]
-    accum_freq: [1]
+    LIST_BS_BETA2_MODELS:
+      - batch_size: [16]
+        accum_freq: [1]
+        beta2: [0.99, 0.999]
+      - batch_size: [32]
+        accum_freq: [2]
+        beta2: [0.95, 0.99, 0.999]
     LIST_LR_LR_COOLDOWN_END:
       - lr: [4.8e-2]
         lr_cooldown_end: [4.8e-4]
@@ -33,7 +42,6 @@ parameters:
     csv_log: [true]
     grad_clip_norm: [1]
     beta1: [0.9]
-    beta2: [0.99, 0.999]
     eps: [1.0e-08]
     report_to: ['wandb']
     resume: ['latest']
