@@ -40,7 +40,7 @@ def eval_ckpt(args, ckpt_path):
     checkpoint_path_name = Path(args.resume).name
     args.train_data = None
     if args.data_key == "json.gz":
-        args.val_data = ["/p/scratch/laionize/smyrnis1/refined_web_tokenized/{00000001..00000010}.tar"] # ~141M tokens
+        args.val_data = ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/{00000001..00000010}.tar"] # ~141M tokens
     elif args.data_key == "json":
         args.val_data = ["/p/fastdata/mmlaion/lmdata/rpj/shard_{00000000..00000003}.tar"]
     args.batch_size = 16
@@ -163,8 +163,4 @@ if __name__ == "__main__":
         for dir in dirs_to_traverse:
             traverse(dir)
         print("Finished sweep")
-        dirs_to_traverse = [os.path.join(original_dir, exp) for exp in os.listdir(original_dir) if os.path.isdir(os.path.join(original_dir, exp))]
-        for dir in dirs_to_traverse:
-            traverse(dir)
-        print("Finished original")
         

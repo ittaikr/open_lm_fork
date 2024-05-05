@@ -27,8 +27,6 @@ def parse_evals(base_path):
                 if len(lines) == 0:
                     continue
                 dict_to_add = json.loads(lines[0])
-                # if int(dict_to_add['epoch']) != 10:
-                #     continue
                 if 'loss' in dict_to_add:
                     dict_to_add['loss_std'] = np.array(dict_to_add['loss']).std()
                     dict_to_add['loss'] = np.array(dict_to_add['loss']).mean()
@@ -62,7 +60,7 @@ def check_if_evals_done(base_path):
         if 'checkpoints' in subdir:
             continue
         subdir_path = os.path.join(base_path, subdir)
-        jsonl_files = [file for file in os.listdir(subdir_path) if file.endswith('.jsonl') and 'epoch_10' in file]
+        jsonl_files = [file for file in os.listdir(subdir_path) if file.endswith('.jsonl') and ('epoch_10' in file or 'poly_08_1_10' in file)]
         checkpoints_path = os.path.join(base_path, 'checkpoints')
         flop_files = [file for file in os.listdir(checkpoints_path) if 'progress' not in file and 'optimizer' not in file]
         if len(jsonl_files) == len(flop_files):
@@ -82,7 +80,7 @@ def preform_evals(exps_path):
                 continue
             subsubdir_path = os.path.join(subdir_path, subsubdir)
             not_done = check_if_evals_done(subsubdir_path)
-            if not_done and not_done != "no eval_results":
+            if not_done and not_done != "no eval_results" and not_done != "no checkpoints":
                 # print(subsubdir, not_done)
                 not_done_count += 1
             elif not_done != "no eval_results" and not_done != "no checkpoints":
