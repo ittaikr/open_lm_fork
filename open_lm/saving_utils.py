@@ -1,9 +1,19 @@
 import logging
 import os
 import torch
+import re
+
 
 def unwrap_model(model):
     return model.module if hasattr(model, 'module') else model
+
+def get_step(args, file_name):
+    match = re.search(r'step_\d+', file_name)
+    if match:
+        return int(match.group().split("_")[-1])
+    # full_path = os.path.join(args.checkpoint_path, file_name)
+    # sd_with_mmap = torch.load(full_path, mmap=True, map_location="cpu")
+    # return sd_with_mmap["step"]
 
 def save_checkpoint_step(args, model, completed_flop, epoch, averagers, current_step):
     if os.path.exists(os.path.join(args.checkpoint_path, f"flop_{completed_flop:.2e}_step_{current_step}.pt")):
@@ -16,9 +26,9 @@ def save_checkpoint_step(args, model, completed_flop, epoch, averagers, current_
     if averagers is not None:
         num_files_to_save += len(averagers.avgs_dict.keys())
     if flop_file_counter >= args.max_checkpoints_flops * num_files_to_save:
-        oldest_step = min([int(file.split("_")[-1].split(".")[0]) for file in os.listdir(args.checkpoint_path) if "flop_" in file and "progress" not in file])
+        oldest_step = min([get_step(args, file) for file in os.listdir(args.checkpoint_path) if "flop_" in file and "progress" not in file])
         for file in os.listdir(args.checkpoint_path):
-            if f"step_{oldest_step}" in file:
+            if get_step(args, file) == oldest_step:
                 os.remove(os.path.join(args.checkpoint_path, file))
     
     checkpoint_dict_model = {
