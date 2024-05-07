@@ -28,7 +28,7 @@ def save_checkpoint_step(args, model, completed_flop, epoch, averagers, current_
     if flop_file_counter >= args.max_checkpoints_flops * num_files_to_save:
         oldest_step = min([get_step(args, file) for file in os.listdir(args.checkpoint_path) if "flop_" in file and "progress" not in file])
         for file in os.listdir(args.checkpoint_path):
-            if get_step(args, file) == oldest_step:
+            if get_step(args, file) == oldest_step and "flop_" in file:
                 os.remove(os.path.join(args.checkpoint_path, file))
     
     checkpoint_dict_model = {
