@@ -60,9 +60,11 @@ def check_if_evals_done(base_path):
         if 'checkpoints' in subdir:
             continue
         subdir_path = os.path.join(base_path, subdir)
-        jsonl_files = [file for file in os.listdir(subdir_path) if file.endswith('.jsonl') and ('epoch_10' in file or 'poly_08_1_10' in file)]
+        # jsonl_files = [file for file in os.listdir(subdir_path) if file.endswith('.jsonl') and ('epoch_10' in file or 'poly_08_1_10' in file)]
+        jsonl_files = [file for file in os.listdir(subdir_path) if file.endswith('.jsonl') and ('flop' in file)]
         checkpoints_path = os.path.join(base_path, 'checkpoints')
-        flop_files = [file for file in os.listdir(checkpoints_path) if 'progress' not in file and 'optimizer' not in file]
+        # flop_files = [file for file in os.listdir(checkpoints_path) if 'progress' not in file and 'optimizer' not in file]
+        flop_files = [file for file in os.listdir(checkpoints_path) if 'flop' in file and 'progress' not in file]
         if len(jsonl_files) == len(flop_files):
             return 0
         else:
@@ -71,6 +73,8 @@ def check_if_evals_done(base_path):
 
 def preform_evals(exps_path):
     not_done_count = 0
+    done_count = 0
+    total_count = 0
     for subdir in os.listdir(exps_path):
         subdir_path = os.path.join(exps_path, subdir)
         if '30-' in subdir or not os.path.isdir(subdir_path):
@@ -83,15 +87,19 @@ def preform_evals(exps_path):
             if not_done and not_done != "no eval_results" and not_done != "no checkpoints":
                 # print(subsubdir, not_done)
                 not_done_count += 1
-            elif not_done != "no eval_results" and not_done != "no checkpoints":
-                parse_evals(subsubdir_path)
+            else:
+                done_count += 1
+                # parse_evals(subsubdir_path)
+            total_count += 1
+    print("total count:", total_count)
     print("not done count:", not_done_count)
+    print("done count:", done_count)
 
 def main():
-    # exps_path = 'exps_final_runs'
-    # preform_evals(exps_path)
-    sweep_path = 'exps_sweep'
-    preform_evals(sweep_path)
+    exps_path = 'exps_final_runs'
+    preform_evals(exps_path)
+    # sweep_path = 'exps_sweep'
+    # preform_evals(sweep_path)
     
 if __name__ == '__main__':
     main()

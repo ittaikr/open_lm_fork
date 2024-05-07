@@ -21,7 +21,9 @@ def parse_resume_path(resume_path):
 
     # get the averager part, if it exists
     if "poly" in resume_path:
-        averager = resume_path.split("_")[-3] + "_" + resume_path.split("_")[-2] + "_" + resume_path.split("_")[-1].split(".")[0]
+        # averager = resume_path.split("_")[-3] + "_" + resume_path.split("_")[-2] + "_" + resume_path.split("_")[-1].split(".")[0]
+        match = re.search(r"poly_\d+_\d+", resume_path)
+        averager = match.group(0) if match else None
     else:
         averager = None
     
