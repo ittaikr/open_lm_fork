@@ -6,8 +6,8 @@ def clean_exp(dir):
         if os.path.isdir(os.path.join(dir, subdir)):
             # remove 'checkpoints' directory in subdir
             if os.path.exists(os.path.join(dir, subdir, 'checkpoints')):
-                os.system('rm -r ' + os.path.join(dir, subdir, 'checkpoints'))
-                # print('rm -r ' + os.path.join(dir, subdir, 'checkpoints'))
+                # os.system('rm -r ' + os.path.join(dir, subdir, 'checkpoints'))
+                print('rm -r ' + os.path.join(dir, subdir, 'checkpoints'))
 
 def check_nccl(dir):
     # for all subdirectories in dir
@@ -32,8 +32,8 @@ def check_nccl(dir):
                         break
 
 def main():
-    dir_name = 'exps'
-    dirs_to_clean = [dir for dir in os.listdir(dir_name) if (os.path.isdir(os.path.join(dir_name, dir)))]
+    dir_name = 'exps_final_runs'
+    dirs_to_clean = [dir for dir in os.listdir(dir_name) if (os.path.isdir(os.path.join(dir_name, dir))) and ('24-05-07' not in dir)]
     for dir in dirs_to_clean:
         clean_exp(os.path.join(dir_name, dir))
     # dirs_to_check = [dir for dir in os.listdir('exps_final_runs')]

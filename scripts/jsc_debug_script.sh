@@ -6,8 +6,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=12
-# #SBATCH --wait-all-nodes=1
-# set the time limit for 30 minutes
 #SBATCH --time=00:30:00
 #SBATCH --partition=develbooster
 #SBATCH --job-name=openlm

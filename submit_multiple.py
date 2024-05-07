@@ -83,7 +83,7 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num_configs',default=0, type=int, help='running limited number of configorations, for dealing with overwrite mistakes')
     parser.add_argument('-q', '--queue', type=int, default=1, help='number of jobs to submit at once')
     parser.add_argument('-a', '--autorestart',action='store_true', help='use autorestart.py script on jsc')
-
+    parser.add_argument('-j', '--job',type=str, default="", help='run only one job')
     args = parser.parse_args()
 
     run_str = 'RUN' if not args.rerun else 'RE-RUN'
@@ -109,6 +109,11 @@ if __name__ == '__main__':
         jobfile = os.path.join(args.jobfile, 'job.yaml')
         with open(jobfile, 'r') as f:
             job_description = yaml.safe_load(f)
+        job_details = job_description['job_details']
+        if 'num_gpus' in job_details or 'num_nodes' in job_details:
+            num_gpus = job_details['num_gpus']
+            num_nodes = job_details['num_nodes']
+            args.script = get_slurm_script(num_nodes, num_gpus)
         batch_dir = args.jobfile
         batch_name = os.path.split(batch_dir)[-1]
 
@@ -168,6 +173,8 @@ if __name__ == '__main__':
             if not os.path.isdir(out_dir) or spec_name.startswith('.'):
                 continue
             if os.path.exists(os.path.join(out_dir, 'done')):
+                continue
+            if not spec_name.startswith(args.job):
                 continue
             spec_filename = os.path.join(out_dir, 'spec.yaml')
             chunk_spec_filename.append(spec_filename)
