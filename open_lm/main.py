@@ -569,6 +569,8 @@ def main(args):
     if args.resume is not None:
         load_avg_models(args, averagers, device=device)
     args.shard_shuffle_seed = shard_shuffle_seed
+    if args.dataset_manifest is not None:
+        args.dataset_manifest = [args.dataset_manifest]
     next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))] if args.dataset_manifest is not None else 0
     samples_seen = 0
     if args.resume is not None and args.dataset_manifest is not None:
@@ -800,7 +802,7 @@ def main(args):
                 args.train_num_samples,
                 next_shard_per_source,
                 args.dataset_manifest,
-                args.train_data_mix_weights,
+                args.train_data_mix_weights, # default None
                 args.workers,
                 args.world_size,
                 multi_epoch=args.multiple_data_passes,
