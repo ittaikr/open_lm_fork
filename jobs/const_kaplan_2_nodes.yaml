@@ -67,7 +67,7 @@ parameters:
         lr_cooldown_end: [4.7e-05] 
         LIST_SCHED_BUDGET:
           - train_num_samples: [216924160]
-            max_tokens: [114769920]
+            max_tokens: [500000000000]
             lr_scheduler: ['const']
             averagers: ['poly_08_1']
             epochs: [100]
