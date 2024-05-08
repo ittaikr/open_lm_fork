@@ -33,7 +33,7 @@ def check_nccl(dir):
 
 def main():
     dir_name = 'exps_final_runs'
-    dirs_to_clean = [dir for dir in os.listdir(dir_name) if (os.path.isdir(os.path.join(dir_name, dir))) and ('24-05-07' not in dir)]
+    dirs_to_clean = [dir for dir in os.listdir(dir_name) if (os.path.isdir(os.path.join(dir_name, dir))) and ('24-05-07' not in dir) and ('chinchilla' not in dir)]
     for dir in dirs_to_clean:
         clean_exp(os.path.join(dir_name, dir))
     # dirs_to_check = [dir for dir in os.listdir('exps_final_runs')]
