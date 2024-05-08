@@ -1,5 +1,5 @@
 job_details:
-  name: const_kaplan_4_nodes
+  name: const_kaplan_4_nodes_less_epochs
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 4
@@ -12,16 +12,16 @@ parameters:
         lr: [5.1e-03]
         lr_cooldown_end: [5.1e-05]
         LIST_SCHED_BUDGET:
-          - train_num_samples: [169574400]
+          - train_num_samples: [1695744000]
             max_tokens: [500000000000] # holder for the max tokens (in submit_multiple all entries in LIST should have the same length)
             lr_scheduler: ['const']
             averagers: ['poly_08_1']
-            epochs: [100]
-          - train_num_samples: [131072000]
+            epochs: [10]
+          - train_num_samples: [436906667]
             max_tokens: [16957440000]
             lr_scheduler: ['cosine']
             averagers: ['none']
-            epochs: [1000]
+            epochs: [300]
 
       - model: ['layers=15_hidden-dim=640']
         warmup_tokens: [108462080, 1572864000] 
@@ -30,16 +30,16 @@ parameters:
         lr: [4.7e-03]
         lr_cooldown_end: [4.7e-05] 
         LIST_SCHED_BUDGET:
-          - train_num_samples: [216924160]
+          - train_num_samples: [2169241600]
             max_tokens: [500000000000]
             lr_scheduler: ['const']
             averagers: ['poly_08_1']
-            epochs: [100]
-          - train_num_samples: [131072000]
+            epochs: [10]
+          - train_num_samples: [436906667]
             max_tokens: [21692416000]
             lr_scheduler: ['cosine']
             averagers: ['none']
-            epochs: [1000]
+            epochs: [300]
 
     beta2: [0.99]
     dataset_resampled: [false]

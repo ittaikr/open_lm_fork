@@ -1,5 +1,5 @@
 job_details:
-  name: const_kaplan_1_nodes
+  name: const_kaplan_1_nodes_less_epochs
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 1
@@ -12,16 +12,16 @@ parameters:
         lr: [1.3e-02]
         lr_cooldown_end: [1.3e-04]
         LIST_SCHED_BUDGET:
-          - train_num_samples: [10346496]
+          - train_num_samples: [103464960]
             max_tokens: [500000000000] # holder for the max tokens (in submit_multiple all entries in LIST should have the same length)
             lr_scheduler: ['const']
             averagers: ['poly_08_1']
-            epochs: [100]
-          - train_num_samples: [131072000]
+            epochs: [10]
+          - train_num_samples: [436906667]
             max_tokens: [1034649600]
             lr_scheduler: ['cosine']
             averagers: ['none']
-            epochs: [1000]
+            epochs: [300]
 
       - model: ['layers=4_hidden-dim=128']
         warmup_tokens: [7503872, 1572864000] 
@@ -30,16 +30,16 @@ parameters:
         lr: [1.15e-02]
         lr_cooldown_end: [1.15e-04]
         LIST_SCHED_BUDGET:
-          - train_num_samples: [15007744]
+          - train_num_samples: [150077440]
             max_tokens: [500000000000] # holder for the max tokens (in submit_multiple all entries in LIST should have the same length)
             lr_scheduler: ['const']
             averagers: ['poly_08_1']
-            epochs: [100]
-          - train_num_samples: [131072000]
+            epochs: [10]
+          - train_num_samples: [436906667]
             max_tokens: [1500774400]
             lr_scheduler: ['cosine']
             averagers: ['none']
-            epochs: [1000]
+            epochs: [300]
 
       - model: ['layers=5_hidden-dim=160']
         warmup_tokens: [9809920, 1572864000] 
@@ -48,16 +48,16 @@ parameters:
         lr: [1.05e-02]
         lr_cooldown_end: [1.05e-04]
         LIST_SCHED_BUDGET:
-          - train_num_samples: [19619840]
+          - train_num_samples: [196198400]
             max_tokens: [500000000000] # holder for the max tokens (in submit_multiple all entries in LIST should have the same length)
             lr_scheduler: ['const']
             averagers: ['poly_08_1']
-            epochs: [100]
-          - train_num_samples: [131072000]
+            epochs: [10]
+          - train_num_samples: [436906667]
             max_tokens: [1961984000]
             lr_scheduler: ['cosine']
             averagers: ['none']
-            epochs: [1000]
+            epochs: [300]
 
       - model: ['layers=6_hidden-dim=224']
         warmup_tokens: [15597568, 1572864000] 
@@ -66,16 +66,16 @@ parameters:
         lr: [9.0e-03]
         lr_cooldown_end: [9.0e-05]
         LIST_SCHED_BUDGET:
-          - train_num_samples: [31195136]
+          - train_num_samples: [311951360]
             max_tokens: [500000000000]
             lr_scheduler: ['const']
             averagers: ['poly_08_1']
-            epochs: [100]
-          - train_num_samples: [131072000]
+            epochs: [10]
+          - train_num_samples: [436906667]
             max_tokens: [3119513600]
             lr_scheduler: ['cosine']
             averagers: ['none']
-            epochs: [1000]
+            epochs: [300]
 
     beta2: [0.99]
     dataset_resampled: [false]
