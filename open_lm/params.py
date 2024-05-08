@@ -45,6 +45,11 @@ def parse_args(args):
             "By default, datapoints are sampled uniformly regardless of the dataset sizes."
         )
     )
+    parser.add_argument(
+        "--multiple-data-passes",
+        action="store_true",
+        help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
+    )
     parser.add_argument("--train-data-upsampling-factors",
         type=str,
         default=None,
@@ -84,7 +89,7 @@ def parse_args(args):
         action="store_true",
         help="Whether to use sampling with replacement for webdataset shard selection."
     )
-    parser.add_argument("--dataset-metadata",
+    parser.add_argument("--dataset-manifest",
         default=None,
         help="Uses metadata to construct a train set."
     )
@@ -422,6 +427,47 @@ def parse_args(args):
         type=int,
         default=100,
         help="Whether to log the evaluation loss. if not 0, it will log the loss over the specified number of steps."
+    )
+    parser.add_argument(
+        "--target-mask-left",
+        type=int,
+        default=None,
+        help="Mask the loss to the left of a specified token (including the specified token).",
+    )
+    parser.add_argument(
+        "--squash-mask-left",
+        default=False,
+        action="store_true",
+        help="squash the target-mask-left tokens in the sequence and pad from right with target-mask-individual",
+    )
+    parser.add_argument(
+        "--target-mask-individual",
+        type=int,
+        default=None,
+        help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
+    )
+    parser.add_argument(
+        "--ignore-parse-errors",
+        action="store_true",
+        default=False,
+        help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
+    )
+    parser.add_argument(
+        "--experimental-meta-device",
+        action="store_true",
+        default=False,
+        help="If True, initialize the model on meta device. This can be useful for loading large models, but is not currently fully tested.",
+    )
+    parser.add_argument(
+        "--force-distributed",
+        action="store_true",
+        help="Allow forcing distributed mode even when running on one gpu. Mostly useful for testing.",
+    )
+    parser.add_argument(
+        "--preset-world-size",
+        type=int,
+        default=None,
+        help="Explicitly set the world size. Useful in cases where a different number of gpus per node need to be used.",
     )
     # log_avg_model_training_loss
     # args_config, remaining = config_parser.parse_known_args()

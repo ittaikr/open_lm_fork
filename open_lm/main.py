@@ -58,6 +58,7 @@ from .file_utils import (
     start_sync_process,
     remote_sync,
     get_string_for_epoch,
+    log_num_checkpoints,
 )
 
 from .utils.average_utils import ModelAverager
@@ -113,9 +114,13 @@ def get_state_dict(name):
     return sd
 
 
-def load_model(args, model, averagers=None):
+def load_model(args, model, averagers=None, different_seed=False):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
+        if not different_seed and "shard_shuffle_seed" in checkpoint:
+            pretrained_seed = checkpoint["shard_shuffle_seed"]
+        else:
+            pretrained_seed = None
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
@@ -140,9 +145,10 @@ def load_model(args, model, averagers=None):
             print("loading av_model_sd")
             checkpoint = checkpoint["av_model_sd"]
         start_epoch = 0
+        pretrained_seed = None
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
-    return start_epoch
+    return start_epoch, pretrained_seed
 
 def load_avg_models(args, averagers, device):
     checkpoint = pt_load(args.resume, map_location="cpu")
@@ -184,8 +190,19 @@ def load_optimizer(args, model, optimizer, scaler):
     else:
         logging.info(f"=> WARNING: not resuming optimizer.")
 
+def load_data_chunks(args):
+    checkpoint = pt_load(args.resume, map_location="cpu")
+    if "next_shard_per_source" in checkpoint and "samples_seen" in checkpoint:
+        return checkpoint["next_shard_per_source"], checkpoint["samples_seen"]
+    else:
+        logging.info(
+            "=> WARNING: tried to resume a checkpoint without data loading info. Re-starting data loading from the "
+            "first shard."
+        )
+        return [0 for _ in range(len(args.dataset_manifest))], 0
 
-def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers):
+
+def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers, next_shard_per_source, samples_seen, shard_shuffle_seed):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
@@ -200,6 +217,12 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
             "state_dict": cpu_state if args.fsdp else model.state_dict(),
             "evaluation_loss": evaluation_loss,
         }
+        if next_shard_per_source is not None:
+            checkpoint_dict_model["next_shard_per_source"] = next_shard_per_source
+
+        if samples_seen is not None:
+            checkpoint_dict_model["samples_seen"] = samples_seen
+
         checkpoint_dict_opt = {
             "epoch": completed_epoch,
             "name": args.name,
@@ -432,12 +455,13 @@ def main(args):
 
     # optionally resume model from a checkpoint
     start_epoch = 0
+    shard_shuffle_seed = args.seed
     if args.resume is not None:
-        start_epoch = load_model(args, model, averagers)
+        start_epoch, shard_shuffle_seed = load_model(args, model, averagers)
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
-        ep = load_model(args, model, averagers)
+        ep, shard_shuffle_seed = load_model(args, model, averagers)
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
             start_epoch = ep
@@ -544,8 +568,15 @@ def main(args):
 
     if args.resume is not None:
         load_avg_models(args, averagers, device=device)
-    
-    if args.train_data or (args.dataset_metadata is not None):
+    args.shard_shuffle_seed = shard_shuffle_seed
+    next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))] if args.dataset_manifest is not None else 0
+    samples_seen = 0
+    if args.resume is not None and args.dataset_manifest is not None:
+        next_shard_per_source, samples_seen = load_data_chunks(args)
+        if samples_seen >= args.train_num_samples * args.epochs:
+            raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
+
+    if args.train_data or (args.dataset_manifest is not None):
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
@@ -596,7 +627,8 @@ def main(args):
         args,
         epoch=start_epoch,
         tokenizer=None,
-        skip_train=args.dataset_metadata is not None,
+        skip_train=args.dataset_manifest is not None,
+        floor=args.dataset_manifest is not None,
     )
 
     if args.torchcompile:
@@ -614,7 +646,7 @@ def main(args):
                 args.batch_size * args.world_size * args.seq_len
             )
     if "train" in data and optimizer is not None:
-        if args.dataset_metadata is not None:
+        if args.dataset_manifest is not None:
             total_steps = (args.train_num_samples * args.epochs) // (
                 args.batch_size * args.world_size
             )
@@ -738,6 +770,8 @@ def main(args):
         if is_master(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
+    # if args.dataset_manifest:
+    #     log_num_checkpoints(total_steps, args)
     if args.flops_to_save is not None:
         if hasattr(model, "module"):
             d_model, num_layers = model.module.tok_embeddings.embedding_dim, model.module.n_layers
@@ -756,19 +790,38 @@ def main(args):
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
 
-        if args.dataset_metadata is not None:
-            assert (
-                not args.dataset_resampled
-            ), "dataset_metadata and dataset_resampled are mutually exclusive"
-            train_data_string, num_samples = get_string_for_epoch(
-                args.train_num_samples, epoch, args.dataset_metadata
+        if args.dataset_manifest is not None:
+            assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
+            (
+                train_data_string_per_source,
+                num_samples_per_source,
+                next_shard_per_source,
+            ) = get_string_for_epoch(
+                args.train_num_samples,
+                next_shard_per_source,
+                args.dataset_manifest,
+                args.train_data_mix_weights,
+                args.workers,
+                args.world_size,
+                multi_epoch=args.multiple_data_passes,
+                shard_shuffle_seed=args.shard_shuffle_seed,
             )
-            print(f"=> epoch {epoch}, training on {train_data_string}")
+
+            # In the distributed case, make sure that all nodes receive the same string
+            if args.distributed:
+                all_source_strings = ["" for _ in range(args.world_size)]
+                dist.all_gather_object(all_source_strings, train_data_string_per_source)
+                assert all(
+                    [x == train_data_string_per_source for x in all_source_strings]
+                ), "Dataset to train on is not the same across all nodes. This should not happen normally, unless there is an issue with shard shuffling during the dataset generation."
+
             if data["train"] is not None:
                 del data["train"]
-            args.train_data = train_data_string
+            args.train_data = train_data_string_per_source
+
+            # Draw num_samples_per_source at most from dataset - rounded down to guarantee uniqueness.
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=num_samples
+                args, True, epoch, force_num_samples=num_samples_per_source, data_key=args.data_key, floor=True
             )
         
         if args.world_size > 1:
@@ -832,8 +885,12 @@ def main(args):
             optimizer.eval()
             model.eval()
         save_checkpoint(
-            args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers
-        )
+            # args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers
+            args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers, 
+            next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
+            samples_seen=samples_seen if args.dataset_manifest is not None else None,
+            shard_shuffle_seed=args.shard_shuffle_seed,
+        ) # new args: next_shard_per_source, samples_seen, shard_shuffle_seed
         if args.schedulefree:
             optimizer.train()
             model.train()

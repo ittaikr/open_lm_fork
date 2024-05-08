@@ -15,7 +15,7 @@ from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.distributed.distributed_c10d import ReduceOp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.autograd import profiler
-
+from open_lm.data import sample_chunk
 try:
     import wandb
 except ImportError:
@@ -72,9 +72,8 @@ def train_one_epoch(
     model.train()
     if args.schedulefree:
         optimizer.train()
-    data["train"].set_epoch(
-        epoch
-    )  # set epoch in process safe manner via sampler or shared_epoch
+    
+    data["train"].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["train"].dataloader
     num_batches_per_epoch = dataloader.num_batches
     sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
@@ -108,8 +107,7 @@ def train_one_epoch(
         optimizer.zero_grad()
         if args.accum_freq == 1:
             with autocast():
-                inputs = texts[:, : args.seq_len - 1]
-                targets = texts[:, 1 : args.seq_len]
+                inputs, targets = sample_chunk(texts, args)
                 out, _ = model(inputs)
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -144,8 +142,7 @@ def train_one_epoch(
                 args.batch_size % args.accum_freq == 0
             ), "Batch size must be divisible by accum_freq"
             per_batch = args.batch_size // args.accum_freq
-            inputs = texts[:, : args.seq_len - 1]
-            targets = texts[:, 1 : args.seq_len]
+            inputs, targets = sample_chunk(texts, args)
             for ii in range(args.accum_freq):
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
