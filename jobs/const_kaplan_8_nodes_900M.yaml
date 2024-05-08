@@ -17,11 +17,11 @@ parameters:
         lr_scheduler: ['const']
         averagers: ['poly_08_1']
         epochs: [10]
-      - train_num_samples: [1310720000]
+      - train_num_samples: [436906667]
         max_tokens: [4805597636]
         lr_scheduler: ['cosine']
         averagers: ['none']
-        epochs: [100]
+        epochs: [300]
 
     
     dataset_resampled: [false]
