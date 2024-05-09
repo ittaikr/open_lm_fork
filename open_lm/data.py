@@ -12,19 +12,32 @@ from dataclasses import dataclass
 from multiprocessing import Value
 from functools import partial
 from itertools import islice
-
-import json
+import copy
 
 import numpy as np
 import pandas as pd
 import torch
 import webdataset as wds
 from PIL import Image
-from torch.utils.data import Dataset, DataLoader, IterableDataset, get_worker_info
+
+
+from torch.utils.data import (
+    Dataset,
+    DataLoader,
+    SubsetRandomSampler,
+    IterableDataset,
+    get_worker_info,
+)
 from torch.utils.data.distributed import DistributedSampler
 from webdataset.filters import _shuffle
-from webdataset.tariterators import base_plus_ext, url_opener, tar_file_expander, valid_sample
+from webdataset.tariterators import (
+    base_plus_ext,
+    url_opener,
+    tar_file_expander,
+    valid_sample,
+)
 from webdataset.mix import RandomMix
+
 
 def seed_worker(worker_id):
     worker_seed = torch.initial_seed() % 2**32
@@ -51,9 +64,10 @@ def preprocess_json(text, vocab_size):
     text = [proc_token(x, vocab_size) for x in text]
     return text
 
+
 class SharedEpoch:
     def __init__(self, epoch: int = 0):
-        self.shared_epoch = Value('i', epoch)
+        self.shared_epoch = Value("i", epoch)
 
     def set_value(self, epoch):
         self.shared_epoch.value = epoch
@@ -75,15 +89,30 @@ class DataInfo:
             self.sampler.set_epoch(epoch)
 
 
+class SyntheticDataset(Dataset):
+    def __init__(self, seq_len, vocab_size, dataset_size=100):
+        self.vocab_size = vocab_size
+        self.seq_len = seq_len
+        self.dataset_size = dataset_size
+
+    def __len__(self):
+        return self.dataset_size
+
+    def __getitem__(self, idx):
+        generator = torch.Generator().manual_seed(idx)
+        return ((torch.rand(self.seq_len + 1, generator=generator) * self.vocab_size).long(),)
+
+
 def expand_urls(urls, weights=None):
     if weights is None:
         expanded_urls = wds.shardlists.expand_urls(urls)
         return expanded_urls, None
     if isinstance(urls, str):
         urllist = urls.split("::")
-        weights = weights.split('::')
-        assert len(weights) == len(urllist),\
-            f"Expected the number of data components ({len(urllist)}) and weights({len(weights)}) to match."
+        weights = weights.split("::")
+        assert len(weights) == len(
+            urllist
+        ), f"Expected the number of data components ({len(urllist)}) and weights({len(weights)}) to match."
         weights = [float(weight) for weight in weights]
         all_urls, all_weights = [], []
         for url, weight in zip(urllist, weights):
@@ -100,14 +129,14 @@ def expand_urls(urls, weights=None):
 def get_dataset_size(shards):
     shards_list, _ = expand_urls(shards)
     dir_path = os.path.dirname(shards_list[0])
-    sizes_filename = os.path.join(dir_path, 'sizes.json')
-    len_filename = os.path.join(dir_path, '__len__')
+    sizes_filename = os.path.join(dir_path, "sizes.json")
+    len_filename = os.path.join(dir_path, "__len__")
     if os.path.exists(sizes_filename):
-        sizes = json.load(open(sizes_filename, 'r'))
+        sizes = json.load(open(sizes_filename, "r"))
         total_size = sum([int(sizes[os.path.basename(shard)]) for shard in shards_list])
     elif os.path.exists(len_filename):
         # FIXME this used to be eval(open(...)) but that seemed rather unsafe
-        total_size = ast.literal_eval(open(len_filename, 'r').read())
+        total_size = ast.literal_eval(open(len_filename, "r").read())
     else:
         total_size = None  # num samples undefined
         # some common dataset sizes (at time of authors last download)
@@ -118,9 +147,10 @@ def get_dataset_size(shards):
     num_shards = len(shards_list)
     return total_size, num_shards
 
+
 def log_and_continue(exn):
     """Call in an exception handler to ignore any exception, issue a warning, and continue."""
-    logging.warning(f'Handling webdataset error ({repr(exn)}). Ignoring.')
+    logging.warning(f"Handling webdataset error ({repr(exn)}). Ignoring.")
     return True
 
 
@@ -233,8 +263,9 @@ class ResampledShards2(IterableDataset):
         self.urls = urls
         self.weights = weights
         if self.weights is not None:
-            assert len(self.urls) == len(self.weights),\
-                f"Number of urls {len(self.urls)} and weights {len(self.weights)} should match."
+            assert len(self.urls) == len(
+                self.weights
+            ), f"Number of urls {len(self.urls)} and weights {len(self.weights)} should match."
         assert isinstance(self.urls[0], str)
         self.nshards = nshards
         self.rng = random.Random()
@@ -265,6 +296,7 @@ class ResampledShards2(IterableDataset):
             else:
                 yield dict(url=self.rng.choices(self.urls, weights=self.weights, k=1)[0])
 
+
 def filter_lt_seqlen(seq_len, x):
     valid_sample = len(x[0]) > seq_len
     if not valid_sample:
@@ -273,7 +305,8 @@ def filter_lt_seqlen(seq_len, x):
         )
 
     return valid_sample
-    
+
+
 class FiniteDataPipeline(wds.DataPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -289,6 +322,7 @@ class FiniteDataPipeline(wds.DataPipeline):
             return islice(self.iterator(), self.nsamples)
         else:
             return self.iterator()
+
 
 def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None):
     """Create a dataloader for a dataset in webdataset format.
@@ -311,8 +345,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
 
     shared_epoch = SharedEpoch(epoch=epoch)  # create a shared epoch store to sync epoch to dataloader worker proc
     for ii, input_shards in enumerate(input_shards_):
-        resampled = getattr(args, 'dataset_resampled', False) and is_train
-
+        resampled = getattr(args, "dataset_resampled", False) and is_train
         num_shards = None
         if is_train:
             if args.train_num_samples is not None:
@@ -327,22 +360,26 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                 num_samples, num_shards = get_dataset_size(input_shards)
                 if not num_samples:
                     raise RuntimeError(
-                        'Currently, the number of dataset samples must be specified for the training dataset. '
-                        'Please specify it via `--train-num-samples` if no dataset length info is present.')
+                        "Currently, the number of dataset samples must be specified for the training dataset. "
+                        "Please specify it via `--train-num-samples` if no dataset length info is present."
+                    )
         else:
             # Eval will just exhaust the iterator if the size is not specified.
             num_samples = args.val_num_samples or 0
 
         if resampled:
-            pipeline = [ResampledShards2(
+            pipeline = [
+                ResampledShards2(
                     input_shards,
                     weights=None,
                     deterministic=True,
                     epoch=shared_epoch,
-            )]
+                )
+            ]
         else:
-            assert args.train_data_upsampling_factors is None,\
-                "--train_data_upsampling_factors is only supported when sampling with replacement (with --dataset-resampled)."
+            assert (
+                args.train_data_upsampling_factors is None
+            ), "--train_data_upsampling_factors is only supported when sampling with replacement (with --dataset-resampled)."
             pipeline = [wds.SimpleShardList(input_shards)]
 
         # at this point we have an iterator over all the shards
@@ -360,8 +397,10 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                         ),
                         wds.split_by_node,
                         wds.split_by_worker,
-                ])
-            pipeline.extend([
+                    ]
+                )
+            pipeline.extend(
+                [
                     # at this point, we have an iterator over the shards assigned to each worker at each node
                     tarfile_to_samples_nothrow,  # wds.tarfile_to_samples(handler=log_and_continue),
                     wds.shuffle(
@@ -372,7 +411,11 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                 ]
             )
         else:
-            pipeline.extend([
+            pipeline.extend(
+                [
+                    wds.tarfile_to_samples(handler=wds.reraise_exception),
+                    # splitting within a tar is fine for evaluation as no checkpointing
+                    wds.split_by_node,
                     wds.split_by_worker,
                 ]
             )
@@ -415,14 +458,15 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             logging.warning("Source mixing is happening during training. It is preferred to mix during tokenization.")
     else:
         pass
-        #dataset = datasets[0]
+
+        # dataset = datasets[0]
     if is_train:
         if not resampled:
             num_shards = num_shards or len(expand_urls(input_shards)[0])
             if num_shards < args.workers * args.world_size:
-                print('Please increase --train-num-samples or decrease workers or world size')
-                print(f'num_shards: {num_shards}, workers: {args.workers}, world_size: {args.world_size}')
-            assert num_shards >= args.workers * args.world_size, 'number of shards must be >= total workers'
+                print("Please increase --train-num-samples or decrease workers or world size")
+                print(f"num_shards: {num_shards}, workers: {args.workers}, world_size: {args.world_size}")
+            assert num_shards >= args.workers * args.world_size, "number of shards must be >= total workers"
         # roll over and repeat a few samples to get same number of full batches on each node
         round_fn = math.floor if floor else math.ceil
         global_batch_size = batch_size * args.world_size
@@ -479,8 +523,35 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
 
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
 
-def get_dataset_fn(data_path, dataset_type):
-    return get_wds_dataset
+
+def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key, floor):
+    print(f"{args.train_num_samples=}")
+    dataset = SyntheticDataset(seq_len=args.seq_len, vocab_size=args.vocab_size, dataset_size=args.train_num_samples)
+    print(f"{len(dataset)=}")
+    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
+    shuffle = is_train and sampler is None
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.per_gpu_batch_size,
+        shuffle=shuffle,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=sampler,
+        drop_last=is_train,
+    )
+    dataloader.num_samples = len(dataset)
+    dataloader.num_batches = len(dataloader)
+
+    return DataInfo(dataloader, sampler)
+
+
+def get_dataset_fn(dataset_type):
+    if dataset_type == "synthetic":
+        return get_synthetic_dataset
+    else:
+        return get_wds_dataset
+
 
 def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
     data = {}
@@ -489,11 +560,11 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
         data["train"] = None
     else:
         if args.train_data or args.dataset_type == "synthetic":
-            data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
+            data["train"] = get_dataset_fn(args.dataset_type)(
                 args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key, floor=floor)
-            
+
     if args.val_data:
-        data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
+        data["val"] = get_dataset_fn(args.dataset_type)(
             args, is_train=False, tokenizer=tokenizer, data_key=args.data_key, floor=floor)
 
     return data
