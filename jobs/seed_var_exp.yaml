@@ -4,7 +4,7 @@ job_details:
   # num_nodes: 4
   # num_gpus: 4
 parameters:
-    model: ['layers=3_hidden-dim=96']
+    model: ['layers=15_hidden-dim=640']
     warmup_tokens: [108462080]
     batch_size: [10]
     accum_freq: [1]

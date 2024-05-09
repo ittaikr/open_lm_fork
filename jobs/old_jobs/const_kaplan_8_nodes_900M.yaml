@@ -6,7 +6,7 @@ job_details:
 parameters:
     model: ['layers=30_hidden-dim=1504']
     warmup_tokens: [901726208, 1572864000] 
-    accum_freq: [4]
+    accum_freq: [5]
     batch_size: [20]
     lr: [2.4e-03]
     lr_cooldown_end: [2.4e-05]
