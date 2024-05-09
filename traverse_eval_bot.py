@@ -101,14 +101,12 @@ def traverse(base_path, skip_not_flop=False):
         if '30-' in exp:
             continue
         args = get_args(exp_path)
-        print(f"Traversing {exp_path}")
         for sub_dir in os.listdir(exp_path):     
             sub_dir_path = os.path.join(exp_path, sub_dir)
             if not os.path.isdir(sub_dir_path) or 'results' in sub_dir_path:
                 continue
             # that means that sub_dir is the checkpoint directory
             for ckpt in os.listdir(sub_dir_path):
-                print(f"Traversing {sub_dir_path}")
                 ckpt_path = os.path.join(sub_dir_path, ckpt)
                 if "optimizer" in ckpt_path: # for now evaluate only the checkpoints that have flop in their name
                     continue
@@ -157,11 +155,10 @@ if __name__ == "__main__":
     while True:
         dirs_to_traverse = [os.path.join(flop_dir_to_traverse, exp) for exp in os.listdir(flop_dir_to_traverse) if os.path.isdir(os.path.join(flop_dir_to_traverse, exp))]
         for dir in dirs_to_traverse:
-            if '24-05-09' not in dir:
-                continue
-            print("traversing", dir)
-            traverse(dir, skip_not_flop=True)
-        print("Finished flop")
+            # if '24-05-09' not in dir:
+            #     continue
+            traverse(dir, skip_not_flop=False)
+        print(f"Finished {flop_dir_to_traverse}")
         # dirs_to_traverse = [os.path.join(sweep_dir, exp) for exp in os.listdir(sweep_dir) if os.path.isdir(os.path.join(sweep_dir, exp))]
         # for dir in dirs_to_traverse:
         #     traverse(dir)

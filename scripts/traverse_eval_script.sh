@@ -1,15 +1,16 @@
 #!/bin/bash -x
 
-# SBATCH --account=transfernetx
-#SBATCH --account=cstdl
+#SBATCH --account=transfernetx
+# SBATCH --account=cstdl
 #SBATCH --nodes=1
 #SBATCH --exclude=jwb[0026,0098,0193,0631,0731,0729,0801,0807,0833,0964,1021]
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=12
-#SBATCH --time=30:00
-# SBATCH --partition=booster
-#SBATCH --partition=develbooster
+# SBATCH --time=30:00
+#SBATCH --time=6:00:00
+#SBATCH --partition=booster
+# SBATCH --partition=develbooster
 #SBATCH --job-name=traverse_eval
 #SBATCH --output=logs_traverse/%x_%j.out
 #SBATCH --error=logs_traverse/%x_%j.out
@@ -40,22 +41,13 @@ cd ${OPEN_CLIP_HOME}
 
 WANDB_MODE=offline
 
-# Running the Python script 4 times in parallel on the same node
-# for i in $(seq 0 $((SLURM_NTASKS_PER_NODE-1))); do
-#   srun --ntasks=1 --exclusive -c 1 --cpus-per-task=1 \
-#        --cpu_bind=cores --gpu-bind=map_gpu:$i \
-#        python traverse_eval_bot.py & # and then wait before submitting the next one
-#     sleep 5
-# done
-# python traverse_eval_bot.py 
-# srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python traverse_eval_bot.py 
-# CUDA_VISIBLE_DEVICES=0 python traverse_eval_bot.py &
-# sleep 5
-# CUDA_VISIBLE_DEVICES=1 python traverse_eval_bot.py &
-# sleep 5
-# CUDA_VISIBLE_DEVICES=2 python traverse_eval_bot.py &
-# sleep 5
-# CUDA_VISIBLE_DEVICES=3 python traverse_eval_bot.py
-# sleep 5
 
-python traverse_eval_bot.py
+# srun --cpu_bind=v --accel-bind=gn --threads-per-core=1 python traverse_eval_bot.py 
+CUDA_VISIBLE_DEVICES=0 python traverse_eval_bot.py &
+sleep 5
+CUDA_VISIBLE_DEVICES=1 python traverse_eval_bot.py &
+sleep 5
+CUDA_VISIBLE_DEVICES=2 python traverse_eval_bot.py &
+sleep 5
+CUDA_VISIBLE_DEVICES=3 python traverse_eval_bot.py
+sleep 5
