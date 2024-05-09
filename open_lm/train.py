@@ -59,11 +59,16 @@ def backward(total_loss, scaler):
     else:
         total_loss.backward()
 
-def log_avg(args, step, batch_count, num_batches_per_epoch):
-    return args.log_avg_model_training_loss and (step % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch)
+def log_avg(args, step):
+    return args.log_avg_model_training_loss and (step % args.log_avg_model_training_loss == 0)
 
-def log_model(args, step, batch_count, num_batches_per_epoch):
-    return step % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch
+def log_model(args, step, i, has_data):
+    if i == 0:
+        return False
+    elif has_data < args.world_size:
+        return True
+    else:
+        return step % args.log_every_n_steps == 0
 
 def train_one_epoch(
     model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, averagers, args, tb_writer=None, csv_path=None
@@ -81,14 +86,6 @@ def train_one_epoch(
     data["train"].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["train"].dataloader
     num_batches_per_epoch = dataloader.num_batches
-    
-    min_num_batches_per_epoch =  torch.tensor(num_batches_per_epoch, dtype=torch.long, device=device)
-    print("num_batches_per_epoch (before reduce)", min_num_batches_per_epoch)
-    if args.world_size > 1:
-        min_num_batches_per_epoch = dist.all_reduce(min_num_batches_per_epoch, op=ReduceOp.MIN)
-        print("min_num_batches_per_epoch (after reduce)", min_num_batches_per_epoch)
-    else:
-        min_num_batches_per_epoch = min_num_batches_per_epoch.item()
 
     sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
     if args.schedulefree:
@@ -133,6 +130,80 @@ def train_one_epoch(
             dist.all_reduce(has_data, op=ReduceOp.SUM)
         else:
             has_data = has_data.item()
+
+        # start of logging
+        if is_master(args) and log_model(args, step, i, has_data):
+            batch_size = len(inputs)
+            num_samples = batch_count * batch_size * args.world_size
+            samples_per_epoch = dataloader.num_samples
+            percent_complete = 100.0 * batch_count / num_batches_per_epoch
+
+            samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
+            samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
+            logging.info(
+                f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
+                f"Loss: {losses_m.avg:.3f} "
+                f"Data (t): {data_time_m.avg:.3f} "
+                f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
+                f"LR: {optimizer.param_groups[0]['lr']:5f} "
+            )
+
+            # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
+            log_data = {
+                "loss": losses_m.avg,
+                "data_time": data_time_m.avg,
+                "batch_time": batch_time_m.avg,
+                "samples_per_second": samples_per_second,
+                "samples_per_second_per_gpu": samples_per_second_per_gpu,
+                "lr": optimizer.param_groups[0]["lr"],
+                "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+            }
+            if args.z_loss_coefficient != 0.0:
+                log_data["z_loss"] = z_losses_m.avg
+            if log_avg(args, step):
+                if averagers is not None:
+                    for key, value in losses_avg_m.items():
+                        log_data[key + "_loss"] = value.avg
+                if args.schedulefree:
+                    log_data["schedfree_loss"] = losses_schedfree_m.avg
+            if args.log_logit_mean:
+                log_data["logit_mean"] = logit_m.val
+
+            for name, val in log_data.items():
+                name = "train/" + name
+                if tb_writer is not None:
+                    tb_writer.add_scalar(name, val, step)
+                if args.wandb:
+                    assert wandb is not None, "Please install wandb."
+                    wandb.log({name: val, "step": step, "tokens": log_data["tokens"]})
+            if csv_path is not None:
+                # if the file does not exist, (which is the case for the first iteration) we need to write the header
+                rowd = OrderedDict(epoch=epoch, step=step)
+                rowd.update([("train/" + k, v) for k, v in log_data.items()])
+                if not os.path.exists(csv_path):
+                    with open(csv_path, "w") as f:
+                        dict_writer = DictWriter(f, fieldnames=rowd.keys())
+                        dict_writer.writeheader()
+                # delete all rows with epoch <= current epoch
+                with open(csv_path, "a") as f:
+                    dict_writer = DictWriter(f, fieldnames=rowd.keys())
+                    dict_writer.writerow(rowd)
+
+
+            # resetting batch / data time meters per log window
+            batch_time_m.reset()
+            data_time_m.reset()
+            # reset all average meters
+            losses_m.reset()
+            if args.z_loss_coefficient != 0.0:
+                z_losses_m.reset()
+            if averagers is not None and log_avg(args, step):
+                for k in averagers.avgs_dict.keys():
+                    losses_avg_m[k].reset()
+            if args.schedulefree:
+                losses_schedfree_m.reset()
+        # end of logging
+
         if has_data < args.world_size:
             break
 
@@ -151,7 +222,7 @@ def train_one_epoch(
                 total_loss = tuple_loss[1] if args.z_loss_coefficient != 0.0 else tuple_loss
                 total_zloss = tuple_loss[0] if args.z_loss_coefficient != 0.0 else None
             backward(tuple_loss[0] if args.z_loss_coefficient != 0.0 else tuple_loss, scaler)
-            if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
+            if log_avg(args, step+1):
                 if averagers is not None:
                     with autocast():
                         inputs = texts[:, : args.seq_len - 1]
@@ -202,7 +273,7 @@ def train_one_epoch(
                     if inputs_ii.shape[0] == 0:
                         break
                     targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
-                    if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
+                    if log_avg(args, step+1):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
                                 with torch.no_grad():
@@ -222,7 +293,7 @@ def train_one_epoch(
                     total_loss = local_loss
                     if local_zloss is not None:
                         total_zloss = local_zloss
-                    if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
+                    if log_avg(args, step+1):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
                                 total_loss_avg[key] = local_avg_losses[key]
@@ -232,7 +303,7 @@ def train_one_epoch(
                     total_loss += local_loss
                     if local_zloss is not None:
                         total_zloss += local_zloss
-                    if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
+                    if log_avg(args, step+1):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
                                 total_loss_avg[key] += local_avg_losses[key]
@@ -267,7 +338,7 @@ def train_one_epoch(
         global_loss_tensor = total_loss.detach().clone()
         if args.z_loss_coefficient != 0.0:
             global_zloss_tensor = total_zloss.detach().clone()
-        if log_avg(args, step, batch_count, min_num_batches_per_epoch):
+        if log_avg(args, step):
             if averagers is not None:
                 for key, value in total_loss_avg.items():
                     total_loss_avg[key] = value.detach().clone()
@@ -278,7 +349,7 @@ def train_one_epoch(
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
             if args.z_loss_coefficient != 0.0:
                 dist.all_reduce(global_zloss_tensor, op=ReduceOp.AVG)
-            if log_avg(args, step, batch_count, min_num_batches_per_epoch):
+            if log_avg(args, step):
                 if args.schedulefree:
                     dist.all_reduce(losses_schedfree, op=ReduceOp.AVG)
                 if averagers is not None:
@@ -290,7 +361,7 @@ def train_one_epoch(
             losses_m.update(global_loss_tensor.item(), batch_size)
             if args.z_loss_coefficient != 0.0:
                 z_losses_m.update(global_zloss_tensor.item(), batch_size)
-            if log_avg(args, step, batch_count, min_num_batches_per_epoch):
+            if log_avg(args, step):
                 if args.schedulefree:
                     losses_schedfree_m.update(losses_schedfree.item(), batch_size)
                 if averagers is not None:
@@ -303,79 +374,6 @@ def train_one_epoch(
             if np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) ):
                 save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
                 logging.info(f"Saved model as it reached {curr_flops} FLOPs")
-        
-        
-
-        if is_master(args) and log_model(args, step, batch_count, min_num_batches_per_epoch):
-            batch_size = len(inputs)
-            num_samples = batch_count * batch_size * args.world_size
-            samples_per_epoch = dataloader.num_samples
-            percent_complete = 100.0 * batch_count / num_batches_per_epoch
-
-            samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
-            samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
-            logging.info(
-                f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
-                f"Loss: {losses_m.avg:.3f} "
-                f"Data (t): {data_time_m.avg:.3f} "
-                f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
-                f"LR: {optimizer.param_groups[0]['lr']:5f} "
-            )
-
-            # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
-            log_data = {
-                "loss": losses_m.avg,
-                "data_time": data_time_m.avg,
-                "batch_time": batch_time_m.avg,
-                "samples_per_second": samples_per_second,
-                "samples_per_second_per_gpu": samples_per_second_per_gpu,
-                "lr": optimizer.param_groups[0]["lr"],
-                "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
-            }
-            if args.z_loss_coefficient != 0.0:
-                log_data["z_loss"] = z_losses_m.avg
-            if log_avg(args, step, batch_count, min_num_batches_per_epoch):
-                if averagers is not None:
-                    for key, value in losses_avg_m.items():
-                        log_data[key + "_loss"] = value.avg
-                if args.schedulefree:
-                    log_data["schedfree_loss"] = losses_schedfree_m.avg
-            if args.log_logit_mean:
-                log_data["logit_mean"] = logit_m.val
-
-            for name, val in log_data.items():
-                name = "train/" + name
-                if tb_writer is not None:
-                    tb_writer.add_scalar(name, val, step)
-                if args.wandb:
-                    assert wandb is not None, "Please install wandb."
-                    wandb.log({name: val, "step": step, "tokens": log_data["tokens"]})
-            if csv_path is not None:
-                # if the file does not exist, (which is the case for the first iteration) we need to write the header
-                rowd = OrderedDict(epoch=epoch, step=step)
-                rowd.update([("train/" + k, v) for k, v in log_data.items()])
-                if not os.path.exists(csv_path):
-                    with open(csv_path, "w") as f:
-                        dict_writer = DictWriter(f, fieldnames=rowd.keys())
-                        dict_writer.writeheader()
-                # delete all rows with epoch <= current epoch
-                with open(csv_path, "a") as f:
-                    dict_writer = DictWriter(f, fieldnames=rowd.keys())
-                    dict_writer.writerow(rowd)
-
-
-            # resetting batch / data time meters per log window
-            batch_time_m.reset()
-            data_time_m.reset()
-            # reset all average meters
-            losses_m.reset()
-            if args.z_loss_coefficient != 0.0:
-                z_losses_m.reset()
-            if averagers is not None and log_avg(args, step, batch_count, min_num_batches_per_epoch):
-                for k in averagers.avgs_dict.keys():
-                    losses_avg_m[k].reset()
-            if args.schedulefree:
-                losses_schedfree_m.reset()
 
     return step
     # end for
