@@ -6,8 +6,8 @@ job_details:
 parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=8_hidden-dim=288']
-        max_tokens: [4497408000]
         warmup_tokens: [22487040, 1572864000] 
+        max_tokens: [4497408000]
 
       - model: ['layers=9_hidden-dim=320']
         warmup_tokens: [28672000, 1572864000] 

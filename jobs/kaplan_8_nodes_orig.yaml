@@ -1,5 +1,5 @@
 job_details:
-  name: kaplan_8_nodes_orig
+  name: kaplan_8_nodes_orig_fix
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 8
@@ -32,7 +32,7 @@ parameters:
     train_num_samples: [436906667]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
-    batch_size: [16] # global batch size is 16*2*4 = 128
+    batch_size: [8]
     grad_checkpointing: [true]
     log_every_n_steps: [20]
     csv_log: [true]
@@ -48,7 +48,7 @@ parameters:
     lr_scheduler: ['cosine']
     log_avg_model_training_loss: [20]
     wd: [0.033]
-    lr: [4.24e-03] 
+    lr: [3.0e-03] 
     epochs: [300]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
