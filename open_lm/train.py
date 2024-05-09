@@ -7,7 +7,7 @@ import time
 from csv import DictWriter
 from collections import OrderedDict
 import torch.distributed as dist
-
+import itertools
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -59,11 +59,16 @@ def backward(total_loss, scaler):
     else:
         total_loss.backward()
 
+def log_avg(args, step, batch_count, num_batches_per_epoch):
+    return args.log_avg_model_training_loss and (step % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch)
+
+def log_model(args, step, batch_count, num_batches_per_epoch):
+    return step % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch
 
 def train_one_epoch(
-    model, data, loss, epoch, optimizer, scaler, scheduler, averagers, args, tb_writer=None, csv_path=None
+    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, averagers, args, tb_writer=None, csv_path=None
 ):
-    log_avg = lambda i, num_batches_per_epoch: args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or (i+1) == num_batches_per_epoch)
+    
     # for saving checkpoints based on flops
 
     device = torch.device(args.device)
@@ -76,6 +81,15 @@ def train_one_epoch(
     data["train"].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["train"].dataloader
     num_batches_per_epoch = dataloader.num_batches
+    
+    min_num_batches_per_epoch =  torch.tensor(num_batches_per_epoch, dtype=torch.long, device=device)
+    print("num_batches_per_epoch (before reduce)", min_num_batches_per_epoch)
+    if args.world_size > 1:
+        min_num_batches_per_epoch = dist.all_reduce(min_num_batches_per_epoch, op=ReduceOp.MIN)
+        print("min_num_batches_per_epoch (after reduce)", min_num_batches_per_epoch)
+    else:
+        min_num_batches_per_epoch = min_num_batches_per_epoch.item()
+
     sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
     if args.schedulefree:
         losses_schedfree = 0
@@ -96,15 +110,37 @@ def train_one_epoch(
 
     end = time.time()
 
-    for i, batch in enumerate(dataloader):
-        step = num_batches_per_epoch * epoch + i
+    data_iterator = iter(dataloader)
+    batch_count = 0
+
+    for i in itertools.count():
+
+        # step = num_batches_per_epoch * epoch + i
         if not args.skip_scheduler:
             scheduler(step)
+
+        if step >= total_steps:
+            logging.warning(f"step: {step} has reached/exceeded total_steps: {total_steps}. ending training.")
+            break
+
+        try:
+            batch = next(data_iterator)
+            has_data = torch.tensor(1, dtype=torch.long, device=device)
+        except StopIteration:
+            has_data = torch.tensor(0, dtype=torch.long, device=device)
+
+        if args.world_size > 1:
+            dist.all_reduce(has_data, op=ReduceOp.SUM)
+        else:
+            has_data = has_data.item()
+        if has_data < args.world_size:
+            break
 
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
+
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
@@ -115,7 +151,7 @@ def train_one_epoch(
                 total_loss = tuple_loss[1] if args.z_loss_coefficient != 0.0 else tuple_loss
                 total_zloss = tuple_loss[0] if args.z_loss_coefficient != 0.0 else None
             backward(tuple_loss[0] if args.z_loss_coefficient != 0.0 else tuple_loss, scaler)
-            if log_avg(i, num_batches_per_epoch):
+            if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
                 if averagers is not None:
                     with autocast():
                         inputs = texts[:, : args.seq_len - 1]
@@ -146,6 +182,8 @@ def train_one_epoch(
             for ii in range(args.accum_freq):
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
+                    if inputs_ii.shape[0] == 0:
+                        break
                     targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                     out, _ = model(inputs_ii)
 
@@ -161,8 +199,10 @@ def train_one_epoch(
                 backward(local_tuple_loss[0] if args.z_loss_coefficient != 0.0 else local_tuple_loss, scaler)
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
+                    if inputs_ii.shape[0] == 0:
+                        break
                     targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
-                    if log_avg(i, num_batches_per_epoch):
+                    if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
                                 with torch.no_grad():
@@ -182,7 +222,7 @@ def train_one_epoch(
                     total_loss = local_loss
                     if local_zloss is not None:
                         total_zloss = local_zloss
-                    if log_avg(i, num_batches_per_epoch):
+                    if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
                                 total_loss_avg[key] = local_avg_losses[key]
@@ -192,7 +232,7 @@ def train_one_epoch(
                     total_loss += local_loss
                     if local_zloss is not None:
                         total_zloss += local_zloss
-                    if log_avg(i, num_batches_per_epoch):
+                    if log_avg(args, step+1, batch_count+1, min_num_batches_per_epoch):
                         if averagers is not None:
                             for key, averager in averagers.avgs_dict.items():
                                 total_loss_avg[key] += local_avg_losses[key]
@@ -220,12 +260,14 @@ def train_one_epoch(
             averagers.step()
         batch_time_m.update(time.time() - end)
         end = time.time()
+
+        step += 1
         batch_count = i + 1
         # create a copy of the loss tensor to avoid modifying the original
         global_loss_tensor = total_loss.detach().clone()
         if args.z_loss_coefficient != 0.0:
             global_zloss_tensor = total_zloss.detach().clone()
-        if log_avg(i, num_batches_per_epoch):
+        if log_avg(args, step, batch_count, min_num_batches_per_epoch):
             if averagers is not None:
                 for key, value in total_loss_avg.items():
                     total_loss_avg[key] = value.detach().clone()
@@ -236,7 +278,7 @@ def train_one_epoch(
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
             if args.z_loss_coefficient != 0.0:
                 dist.all_reduce(global_zloss_tensor, op=ReduceOp.AVG)
-            if log_avg(i, num_batches_per_epoch):
+            if log_avg(args, step, batch_count, min_num_batches_per_epoch):
                 if args.schedulefree:
                     dist.all_reduce(losses_schedfree, op=ReduceOp.AVG)
                 if averagers is not None:
@@ -248,7 +290,7 @@ def train_one_epoch(
             losses_m.update(global_loss_tensor.item(), batch_size)
             if args.z_loss_coefficient != 0.0:
                 z_losses_m.update(global_zloss_tensor.item(), batch_size)
-            if log_avg(i, num_batches_per_epoch):
+            if log_avg(args, step, batch_count, min_num_batches_per_epoch):
                 if args.schedulefree:
                     losses_schedfree_m.update(losses_schedfree.item(), batch_size)
                 if averagers is not None:
@@ -256,15 +298,15 @@ def train_one_epoch(
                         losses_avg_m[key].update(value.item(), batch_size)
                         
         if args.flops_to_save is not None and is_master(args):
-            curr_flops = 6 * (step + 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
-            prev_flops = 6 * step * args.batch_size * args.seq_len * args.world_size * args.params_count
+            curr_flops = 6 * step * args.batch_size * args.seq_len * args.world_size * args.params_count
+            prev_flops = 6 * (step - 1) * args.batch_size * args.seq_len * args.world_size * args.params_count
             if np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) ):
                 save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
                 logging.info(f"Saved model as it reached {curr_flops} FLOPs")
         
         
 
-        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
+        if is_master(args) and log_model(args, step, batch_count, min_num_batches_per_epoch):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
             samples_per_epoch = dataloader.num_samples
@@ -292,7 +334,7 @@ def train_one_epoch(
             }
             if args.z_loss_coefficient != 0.0:
                 log_data["z_loss"] = z_losses_m.avg
-            if log_avg(i, num_batches_per_epoch):
+            if log_avg(args, step, batch_count, min_num_batches_per_epoch):
                 if averagers is not None:
                     for key, value in losses_avg_m.items():
                         log_data[key + "_loss"] = value.avg
@@ -329,13 +371,13 @@ def train_one_epoch(
             losses_m.reset()
             if args.z_loss_coefficient != 0.0:
                 z_losses_m.reset()
-            if averagers is not None and log_avg(i, num_batches_per_epoch):
+            if averagers is not None and log_avg(args, step, batch_count, min_num_batches_per_epoch):
                 for k in averagers.avgs_dict.keys():
                     losses_avg_m[k].reset()
             if args.schedulefree:
                 losses_schedfree_m.reset()
 
-    return None        
+    return step
     # end for
 
 def evaluate(model, data, start_epoch, args, writer):

@@ -1,10 +1,10 @@
 #!/bin/bash -x
 
 #SBATCH --account=cstdl
-#SBATCH --nodes=1
+#SBATCH --nodes=4
 #SBATCH --exclude=jwb[0026,0098,0193,0631,0731,0729,0801,0807,0833,0964,1021]
-#SBATCH --gres=gpu:1
-#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:4
+#SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=12
 #SBATCH --time=00:30:00
 #SBATCH --partition=develbooster

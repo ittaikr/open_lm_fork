@@ -1,8 +1,8 @@
 job_details:
   name: new_code_dbg
   output_dir: exps
-  num_nodes: 4
-  num_gpus: 4
+  # num_nodes: 4
+  # num_gpus: 4
 parameters:
     model: ['layers=15_hidden-dim=640']
     warmup_tokens: [108462080]

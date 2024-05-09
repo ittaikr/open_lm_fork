@@ -124,6 +124,7 @@ def load_model(args, model, averagers=None, different_seed=False):
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
+        global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             print("erase module. from keys in state_dict")
             sd = {k[len("module.") :]: v for k, v in sd.items()}
@@ -144,11 +145,11 @@ def load_model(args, model, averagers=None, different_seed=False):
         if "av_model_sd" in checkpoint:
             print("loading av_model_sd")
             checkpoint = checkpoint["av_model_sd"]
-        start_epoch = 0
+        start_epoch, global_step = 0, 0
         pretrained_seed = None
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
-    return start_epoch, pretrained_seed
+    return start_epoch, global_step, pretrained_seed
 
 def load_avg_models(args, averagers, device):
     checkpoint = pt_load(args.resume, map_location="cpu")
@@ -202,7 +203,7 @@ def load_data_chunks(args):
         return [0 for _ in range(len(args.dataset_manifest))], 0
 
 
-def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers, next_shard_per_source, samples_seen, shard_shuffle_seed):
+def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers, step, next_shard_per_source, samples_seen, shard_shuffle_seed):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
@@ -222,6 +223,9 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
 
         if samples_seen is not None:
             checkpoint_dict_model["samples_seen"] = samples_seen
+
+        if step is not None:
+            checkpoint_dict_model["step"] = step
 
         checkpoint_dict_opt = {
             "epoch": completed_epoch,
@@ -454,14 +458,14 @@ def main(args):
 
 
     # optionally resume model from a checkpoint
-    start_epoch = 0
+    start_epoch, global_step = 0, 0
     shard_shuffle_seed = args.seed
     if args.resume is not None:
-        start_epoch, shard_shuffle_seed = load_model(args, model, averagers)
+        start_epoch, global_step, shard_shuffle_seed = load_model(args, model, averagers)
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
-        ep, shard_shuffle_seed = load_model(args, model, averagers)
+        ep, global_step, shard_shuffle_seed = load_model(args, model, averagers)
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
             start_epoch = ep
@@ -787,8 +791,10 @@ def main(args):
             args.flops_to_save = np.array([float(flop) for flop in args.flops_to_save])
 
     should_break = False
-
-    for epoch in range(start_epoch, args.epochs):
+    epoch = start_epoch
+    done_training = global_step >= total_steps
+    # for epoch in range(start_epoch, args.epochs):
+    while not done_training:
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
 
@@ -825,17 +831,19 @@ def main(args):
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples=num_samples_per_source, data_key=args.data_key, floor=True
             )
-        
+        prev_step = global_step
         if args.world_size > 1:
             dist.barrier()
-        train_one_epoch(
+        global_step = train_one_epoch(
             model,
             data,
             loss,
             epoch,
+            global_step,
             optimizer,
             scaler,
             scheduler,
+            total_steps,
             averagers,
             args,
             tb_writer=writer,
@@ -845,6 +853,12 @@ def main(args):
         completed_epoch = epoch + 1
         if args.world_size > 1:
             dist.barrier()
+
+        done_training = global_step >= total_steps
+        steps_done_epoch = global_step - prev_step
+        samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
+        epoch = epoch + 1
+
         evaluation_loss = -1
         if "val" in data:
 
@@ -874,7 +888,7 @@ def main(args):
                             f.write(",".join([str(v) for v in metrics.values()]) + "\n")
 
         if args.max_tokens is not None:
-            tokens_seen = (data["train"].dataloader.num_batches) * (epoch + 1) * args.batch_size * args.seq_len * args.world_size
+            tokens_seen = samples_seen * args.seq_len
             if tokens_seen >= args.max_tokens:
                 should_break = True
                 logging.info(f"Reached max tokens {args.max_tokens}, stopping training.")
@@ -888,7 +902,7 @@ def main(args):
             model.eval()
         save_checkpoint(
             # args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers
-            args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers, 
+            args, model, optimizer, scaler, completed_epoch, evaluation_loss, averagers, global_step,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
             shard_shuffle_seed=args.shard_shuffle_seed,
