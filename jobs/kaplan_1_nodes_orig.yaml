@@ -1,25 +1,25 @@
 job_details:
-  name: kaplan_2_nodes_orig
+  name: kaplan_1_nodes_orig
   output_dir: exps_final_runs
   num_gpus: 4
-  num_nodes: 2
+  num_nodes: 1
 parameters:
     LIST_MODEL_TOKENS:
-      - model: ['layers=8_hidden-dim=288']
-        max_tokens: [4497408000]
-        warmup_tokens: [22487040, 1572864000] 
+      - model: ['layers=3_hidden-dim=96']
+        max_tokens: [1034649600]
+        warmup_tokens: [5173248, 1572864000] 
 
-      - model: ['layers=9_hidden-dim=320']
-        warmup_tokens: [28672000, 1572864000] 
-        max_tokens: [5734400000]
+      - model: ['layers=4_hidden-dim=128']
+        warmup_tokens: [7503872, 1572864000] 
+        max_tokens: [1500774400]
 
-      - model: ['layers=10_hidden-dim=384']
-        warmup_tokens: [37060608, 1572864000] 
-        max_tokens: [7412121600]
+      - model: ['layers=5_hidden-dim=160']
+        warmup_tokens: [9809920, 1572864000] 
+        max_tokens: [1961984000]
 
-      - model: ['layers=12_hidden-dim=480']
-        warmup_tokens: [57384960, 1572864000] 
-        max_tokens: [11476992000] 
+      - model: ['layers=6_hidden-dim=224']
+        warmup_tokens: [15597568, 1572864000] 
+        max_tokens: [3119513600] 
     
     train_num_samples: [436906667]
     dataset_resampled: [false]
@@ -40,7 +40,7 @@ parameters:
     lr_scheduler: ['cosine']
     log_avg_model_training_loss: [20] 
     wd: [0.033]
-    lr: [2.12e-03] # change to 4.24e-03?
+    lr: [1.5e-03] # change to 4.24e-03?
     epochs: [300]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
