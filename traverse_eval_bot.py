@@ -53,7 +53,7 @@ def eval_ckpt(args, ckpt_path):
     model = create_model(args)
     device = init_distributed_device(args)
     model = model.to(device)
-    start_epoch = load_model(args, model, None)
+    start_epoch, global_step, pretrained_seed = load_model(args, model, None)
 
     data = get_data(
         args,
@@ -70,7 +70,10 @@ def eval_ckpt(args, ckpt_path):
         metrics["flop"], metrics["step"], metrics["averager"] = parse_resume_path(checkpoint_path_name)
     else:
         metrics["epoch"] = args.resume.split("_")[-1].split(".")[0]
-        metrics["averager"] = None if "poly" not in args.resume else args.resume.split("_")[-3] + "_" + args.resume.split("_")[-2] + "_" + args.resume.split("_")[-1].split(".")[0]
+        # metrics["averager"] = None if "poly" not in args.resume else args.resume.split("_")[-3] + "_" + args.resume.split("_")[-2] + "_" + args.resume.split("_")[-1].split(".")[0]
+        match = re.search(r"poly_\d+_\d+", args.resume)
+        metrics["averager"] = match.group(0) if match else None
+        metrics["step"] = global_step
     path_dir_to_save = os.path.join(Path(checkpoint_root).parent, "eval_results")
     if not os.path.exists(path_dir_to_save):
         os.makedirs(path_dir_to_save)
