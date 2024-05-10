@@ -11,8 +11,6 @@ parameters:
         batch_size: [5]
         lr: [1.3e-02]
         lr_cooldown_end: [1.3e-04]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [5033911]
             epochs: [5]
@@ -27,8 +25,6 @@ parameters:
         batch_size: [7]
         lr: [1.15e-02]
         lr_cooldown_end: [1.15e-04]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [4957758]            
             epochs: [7]
@@ -42,8 +38,6 @@ parameters:
         accum_freq: [1]
         batch_size: [8]
         lr: [1.05e-02]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
         lr_cooldown_end: [1.05e-04]
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [10618504, 21237007, 42474013, 84948026]          
@@ -59,8 +53,6 @@ parameters:
         batch_size: [11]
         lr: [9.0e-03]
         lr_cooldown_end: [9.0e-05]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [13356784, 26713567, 53427133, 106854266]           
             epochs: [10]
@@ -69,6 +61,8 @@ parameters:
             epochs: [10]
             max_checkpoints_flops: [3]
 
+    
+    lr_scheduler: ['cosine']
     beta2: [0.99]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']

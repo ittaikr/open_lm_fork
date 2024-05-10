@@ -13,11 +13,11 @@ parameters:
         lr_cooldown_end: [4.3e-05]
         beta2: [0.99]
         LIST_BUDGET_MAX_SAVE:
-        - train_num_samples: [8945830]
-          max_checkpoints_flops: [3]
-        - train_num_samples: [17891659, 35783317, 71566634, 143133268]
-          max_checkpoints_flops: [0]
-        lr_scheduler: ['cosine']
+            - train_num_samples: [8945830]
+              max_checkpoints_flops: [3]
+            - train_num_samples: [17891659, 35783317, 71566634, 143133268]
+              max_checkpoints_flops: [0]
+        
 
       - model: ['layers=21_hidden-dim=832']
         warmup_tokens: [220872704] 
@@ -27,12 +27,10 @@ parameters:
         lr_cooldown_end: [3.8e-05]
         beta2: [0.95]
         LIST_BUDGET_MAX_SAVE:
-        - train_num_samples: [12073320]
-          max_checkpoints_flops: [3]
-        - train_num_samples: [24146639, 48293277, 96586554, 193173108]
-          max_checkpoints_flops: [0]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
+          - train_num_samples: [12073320]
+            max_checkpoints_flops: [3]
+          - train_num_samples: [24146639, 48293277, 96586554, 193173108]
+            max_checkpoints_flops: [0]
 
       - model: ['layers=23_hidden-dim=1024']
         warmup_tokens: [347078656] 
@@ -42,12 +40,10 @@ parameters:
         lr_cooldown_end: [3.2e-05]
         beta2: [0.95]
         LIST_BUDGET_MAX_SAVE:
-        - train_num_samples: [15366354]
-          max_checkpoints_flops: [3]
-        - train_num_samples: [30732708, 61465415, 122930829, 245861657]
-          max_checkpoints_flops: [0]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
+          - train_num_samples: [15366354]
+            max_checkpoints_flops: [3]
+          - train_num_samples: [30732708, 61465415, 122930829, 245861657]
+            max_checkpoints_flops: [0]
 
       - model: ['layers=26_hidden-dim=1120']
         warmup_tokens: [455311360] 
@@ -57,12 +53,10 @@ parameters:
         lr_cooldown_end: [3.0e-05]
         beta2: [0.95]
         LIST_BUDGET_MAX_SAVE:
-        - train_num_samples: [23427193]
-          max_checkpoints_flops: [3]
+          - train_num_samples: [23427193]
+            max_checkpoints_flops: [3]
           - train_num_samples: [46854385, 93708769]
-          max_checkpoints_flops: [0]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
+            max_checkpoints_flops: [0]
 
       - model: ['layers=26_hidden-dim=1312']
         warmup_tokens: [611958784] 
@@ -72,12 +66,10 @@ parameters:
         lr_cooldown_end: [2.7e-05]
         beta2: [0.95]
         LIST_BUDGET_MAX_SAVE:
-        - train_num_samples: [34860736]
-          max_checkpoints_flops: [3]
-        - train_num_samples: [69721472]
-          max_checkpoints_flops: [0]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
+          - train_num_samples: [34860736]
+            max_checkpoints_flops: [3]
+          - train_num_samples: [69721472]
+            max_checkpoints_flops: [0]
 
       - model: ['layers=30_hidden-dim=1504']
         warmup_tokens: [901726208] 
@@ -87,11 +79,10 @@ parameters:
         lr_cooldown_end: [2.4e-05]
         beta2: [0.95]
         LIST_BUDGET_MAX_SAVE:
-        - train_num_samples: [47316654]
-          max_checkpoints_flops: [3]
-        lr_scheduler: ['cosine']
-        averagers: ['none']
+          - train_num_samples: [47316654]
+            max_checkpoints_flops: [3]
 
+    lr_scheduler: ['cosine']
     epochs: [100]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
