@@ -18,6 +18,8 @@ def get_step(args, file_name):
 def save_checkpoint_step(args, model, completed_flop, epoch, averagers, current_step):
     if os.path.exists(os.path.join(args.checkpoint_path, f"flop_{completed_flop:.2e}_step_{current_step}.pt")):
         return # in case of resuming, we don't want to save the same checkpoint twice
+    if args.max_checkpoints_flops == 0:
+        return # if we don't want to save checkpoints, return
     flop_file_counter = 0
     for file in os.listdir(args.checkpoint_path):
         if "flop_" in file and "progress" not in file:
