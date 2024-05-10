@@ -62,10 +62,10 @@ parameters:
         lr_scheduler: ['cosine']
         averagers: ['none']
         LIST_EPOCHS_BUDGET:
-          - train_num_samples: [7862823]
+          - train_num_samples: [5808723]
             max_checkpoints_flops: [3]
             epochs: [50]
-          - train_num_samples: [15725645, 31451289, 62902577, 125805153]
+          - train_num_samples: [11617447, 23234892, 46469784, 92939567]
             max_checkpoints_flops: [0]
             epochs: [50]
 
