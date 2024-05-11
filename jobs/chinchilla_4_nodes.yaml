@@ -1,16 +1,12 @@
 job_details:
-  name: CC_4_nodes_tuned_openwebtext2
+  name: CC_4_nodes_orig_openwebtext2
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 4
 parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=14_hidden-dim=576']
-        warmup_tokens: [84787200] 
-        accum_freq: [1]
-        batch_size: [8]
-        lr: [5.1e-03]
-        lr_cooldown_end: [5.1e-05]
+        warmup_tokens: [84787200]
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [7862823]
             max_checkpoints_flops: [3]
@@ -19,19 +15,18 @@ parameters:
 
       - model: ['layers=15_hidden-dim=640']
         warmup_tokens: [108462080] 
-        accum_freq: [1]
-        batch_size: [10]
-        lr: [4.7e-03]
-        lr_cooldown_end: [4.7e-05] 
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [6146542]
             max_checkpoints_flops: [3]
           - train_num_samples: [12293084, 24586166, 49172332, 98344663]
             max_checkpoints_flops: [0]
 
+    lr: [4.24e-3]
+    batch_size: [8]
+    lr_cooldown_end: [4.24e-5]
+    beta2: [0.95]
     lr_scheduler: ['cosine']
-    epochs: [50]
-    beta2: [0.99]
+    # beta2: [0.99]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     grad_checkpointing: [true]
@@ -46,7 +41,8 @@ parameters:
     qk_norm: [true]
     z_loss_coefficient: [0.0001]
     log_avg_model_training_loss: [20]
-    decoupled_wd: [1.0e-4]
+    # decoupled_wd: [1.0e-4]
+    wd: [0.033]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
     workers: [2]

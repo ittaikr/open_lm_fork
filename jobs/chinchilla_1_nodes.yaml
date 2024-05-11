@@ -1,5 +1,5 @@
 job_details:
-  name: CC_1_nodes_tuned_openwebtext2
+  name: CC_1_nodes_orig_openwebtext2
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 1
@@ -7,10 +7,6 @@ parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=3_hidden-dim=96']
         warmup_tokens: [5173248] 
-        accum_freq: [1]
-        batch_size: [5]
-        lr: [1.3e-02]
-        lr_cooldown_end: [1.3e-04]
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [5033911]
             epochs: [5]
@@ -21,10 +17,6 @@ parameters:
 
       - model: ['layers=4_hidden-dim=128']
         warmup_tokens: [7503872] 
-        accum_freq: [1]
-        batch_size: [7]
-        lr: [1.15e-02]
-        lr_cooldown_end: [1.15e-04]
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [4957758]            
             epochs: [7]
@@ -35,10 +27,6 @@ parameters:
 
       - model: ['layers=5_hidden-dim=160']
         warmup_tokens: [9809920] 
-        accum_freq: [1]
-        batch_size: [8]
-        lr: [1.05e-02]
-        lr_cooldown_end: [1.05e-04]
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [10618504, 21237007, 42474013, 84948026]          
             epochs: [10]
@@ -49,10 +37,6 @@ parameters:
 
       - model: ['layers=6_hidden-dim=224']
         warmup_tokens: [15597568] 
-        accum_freq: [1]
-        batch_size: [11]
-        lr: [9.0e-03]
-        lr_cooldown_end: [9.0e-05]
         LIST_EPOCHS_BUDGET:
           - train_num_samples: [13356784, 26713567, 53427133, 106854266]           
             epochs: [10]
@@ -61,9 +45,12 @@ parameters:
             epochs: [10]
             max_checkpoints_flops: [3]
 
-    
+    lr: [3.0e-3]
+    batch_size: [16]
+    lr_cooldown_end: [3.0e-5]
+    beta2: [0.95]
     lr_scheduler: ['cosine']
-    beta2: [0.99]
+    # beta2: [0.99]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     grad_checkpointing: [true]
@@ -78,7 +65,8 @@ parameters:
     qk_norm: [true]
     z_loss_coefficient: [0.0001]
     log_avg_model_training_loss: [20]
-    decoupled_wd: [1.0e-4]
+    # decoupled_wd: [1.0e-4]
+    wd: [0.033]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
     workers: [2]
