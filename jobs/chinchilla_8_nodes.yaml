@@ -48,7 +48,6 @@ parameters:
 
       - model: ['layers=30_hidden-dim=1504']
         warmup_tokens: [901726208] 
-        beta2: [0.95]
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [47316654]
             max_checkpoints_flops: [3]
