@@ -44,7 +44,7 @@ def eval_ckpt(args, ckpt_path):
     if args.data_key == "json.gz":
         args.val_data = ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/{00000001..00000010}.tar"]# ~141M tokens
         if "openwebtext2" in args.dataset_manifest:
-            args.val_data = ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/shard_{00000001..000000013}.tar"]
+            args.val_data = ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/{0000001..00000013}.tar"]
     elif args.data_key == "json":
         args.val_data = ["/p/fastdata/mmlaion/lmdata/rpj/shard_{00000000..00000003}.tar"]
     args.ignore_parse_errors = False
