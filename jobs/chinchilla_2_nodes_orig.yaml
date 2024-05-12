@@ -1,49 +1,49 @@
 job_details:
-  name: CC_2_nodes_orig_openwebtext2
+  name: CC_2_nodes_orig_short
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 2
 parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=8_hidden-dim=288']
-        warmup_tokens: [22487040] 
+        epochs: [5]
         LIST_EPOCHS_BUDGET:
-          - train_num_samples: [9264596]
-            max_checkpoints_flops: [3]
-            epochs: [10]
-          - train_num_samples: [18529192, 37058383, 74116766, 148233531]
+          - train_num_samples: [4632298] 
+            max_checkpoints_flops: [1]
+            warmup_tokens: [5621760] 
+          - train_num_samples: [9264596] #4632298*2=9264596
             max_checkpoints_flops: [0]
-            epochs: [10]
+            warmup_tokens: [11243520] 
 
       - model: ['layers=9_hidden-dim=320']
-        warmup_tokens: [28672000] 
+        epochs: [29]
         LIST_EPOCHS_BUDGET:
-          - train_num_samples: [5011097]
-            max_checkpoints_flops: [3]
-            epochs: [29]
-          - train_num_samples: [5812873, 11625745, 23251489, 46502977]
+          - train_num_samples: [2505548] 
             max_checkpoints_flops: [0]
-            epochs: [50]
+            warmup_tokens: [14336000] 
+          - train_num_samples: [1252774] 
+            max_checkpoints_flops: [1]
+            warmup_tokens: [7168000] 
 
       - model: ['layers=10_hidden-dim=384']
-        warmup_tokens: [37060608] 
+        epochs: [45]
         LIST_SCHED_BUDGET:
-          - train_num_samples: [4996820]            
-            max_checkpoints_flops: [3]
-            epochs: [45]
-          - train_num_samples: [8994277, 17988552, 35977104, 71954208]
+          - train_num_samples: [2498410]
             max_checkpoints_flops: [0]
-            epochs: [50]
+            warmup_tokens: [18530304] 
+          - train_num_samples: [1249205]
+            max_checkpoints_flops: [1]
+            warmup_tokens: [9265152] 
 
       - model: ['layers=12_hidden-dim=480']
-        warmup_tokens: [57384960] 
+        epochs: [25]
         LIST_EPOCHS_BUDGET:
-          - train_num_samples: [5808723]
-            max_checkpoints_flops: [3]
-            epochs: [50]
-          - train_num_samples: [11617447, 23234892, 46469784, 92939567]
+          - train_num_samples: [2904361]
+            max_checkpoints_flops: [1]
+            warmup_tokens: [14346240] 
+          - train_num_samples: [5808722] #2904361*2=5808722
             max_checkpoints_flops: [0]
-            epochs: [50]
+            warmup_tokens: [28692480]
 
     lr: [4.24e-3]
     batch_size: [16]
@@ -71,6 +71,6 @@ parameters:
     delete_previous_checkpoint: [true]
     workers: [2]
     flops_to_save: ['3.125e+15,6.250e+15,1.250e+16,2.500e+16,5.000e+16,1.000e+17,2.000e+17,4.000e+17,8.000e+17,1.600e+18,3.200e+18,6.400e+18,1.280e+19,2.560e+19,5.120e+19,1.024e+20']
-    # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
-    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/manifest_train.jsonl"]
+    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
+    # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/manifest_train.jsonl"]
     multiple_data_passes: [true]

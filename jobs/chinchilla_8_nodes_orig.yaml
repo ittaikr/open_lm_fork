@@ -1,56 +1,76 @@
 job_details:
-  name: CC_8_nodes_orig_openwebtext2
+  name: CC_8_nodes_orig_short
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 8
 parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=18_hidden-dim=704']
-        warmup_tokens: [149045248] 
         LIST_BUDGET_MAX_SAVE:
-            - train_num_samples: [8945830]
-              max_checkpoints_flops: [3]
-            - train_num_samples: [17891659, 35783317, 71566634, 143133268]
-              max_checkpoints_flops: [0]
+          - train_num_samples: [8945830]
+            max_checkpoints_flops: [1]
+            epochs: [25]
+            warmup_tokens: [37261312] 
+          - train_num_samples: [8945830]
+            max_checkpoints_flops: [0]
+            epochs: [50]
+            warmup_tokens: [74522624]
         
 
       - model: ['layers=21_hidden-dim=832']
-        warmup_tokens: [220872704] 
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [12073320]
-            max_checkpoints_flops: [3]
-          - train_num_samples: [24146639, 48293277, 96586554, 193173108]
+            max_checkpoints_flops: [1]
+            epochs: [25]
+            warmup_tokens: [55218176] 
+          - train_num_samples: [12073320]
             max_checkpoints_flops: [0]
+            epochs: [50]
+            warmup_tokens: [110436352]
 
       - model: ['layers=23_hidden-dim=1024']
-        warmup_tokens: [347078656] 
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [15366354]
-            max_checkpoints_flops: [3]
-          - train_num_samples: [30732708, 61465415, 122930829]
             max_checkpoints_flops: [0]
+            epochs: [50]
+            warmup_tokens: [173539328] 
+          - train_num_samples: [15366354]
+            max_checkpoints_flops: [1]
+            epochs: [25]
+            warmup_tokens: [86769664] 
 
       - model: ['layers=26_hidden-dim=1120']
-        warmup_tokens: [455311360] 
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [23427193]
-            max_checkpoints_flops: [3]
-          - train_num_samples: [46854385, 93708769]
+            max_checkpoints_flops: [1]
+            epochs: [25]
+            warmup_tokens: [113827840] 
+          - train_num_samples: [23427193]
             max_checkpoints_flops: [0]
+            epochs: [50]
+            warmup_tokens: [227655680] 
 
       - model: ['layers=26_hidden-dim=1312']
-        warmup_tokens: [611958784] 
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [34860736]
-            max_checkpoints_flops: [3]
-          - train_num_samples: [69721472]
             max_checkpoints_flops: [0]
+            epochs: [50]
+            warmup_tokens: [305979392] 
+          - train_num_samples: [34860736]
+            max_checkpoints_flops: [1]
+            epochs: [25]
+            warmup_tokens: [152989696] 
 
       - model: ['layers=30_hidden-dim=1504']
-        warmup_tokens: [901726208] 
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [47316654]
-            max_checkpoints_flops: [3]
+            max_checkpoints_flops: [0]
+            epochs: [50]
+            warmup_tokens: [450863104]
+          - train_num_samples: [47316654]
+            max_checkpoints_flops: [1]
+            epochs: [25]
+            warmup_tokens: [225431552] 
 
     lr: [6.0e-3]
     batch_size: [8]
@@ -78,6 +98,6 @@ parameters:
     delete_previous_checkpoint: [true]
     workers: [2]
     flops_to_save: ['3.125e+15,6.250e+15,1.250e+16,2.500e+16,5.000e+16,1.000e+17,2.000e+17,4.000e+17,8.000e+17,1.600e+18,3.200e+18,6.400e+18,1.280e+19,2.560e+19,5.120e+19,1.024e+20']
-    # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
-    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/manifest_train.jsonl"]
+    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
+    # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/manifest_train.jsonl"]
     multiple_data_passes: [true]
