@@ -40,7 +40,7 @@ parameters:
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [347078656]
             max_checkpoints_flops: [0]
-            epochs: [80, 40, 20, 10, 5]
+            epochs: [40, 20, 10, 5]
             warmup_tokens: [347078656]
           - train_num_samples: [173539328]
             max_checkpoints_flops: [0]
@@ -55,7 +55,7 @@ parameters:
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [455311360]
             max_checkpoints_flops: [0]
-            epochs: [80, 40, 20, 10, 5]
+            epochs: [20, 10, 5]
             warmup_tokens: [455311360] 
           - train_num_samples: [227655680]
             max_checkpoints_flops: [0]
@@ -70,7 +70,7 @@ parameters:
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [611958784]
             max_checkpoints_flops: [0]
-            epochs: [80, 40, 20, 10, 5]
+            epochs: [10, 5]
             warmup_tokens: [611958784] 
           - train_num_samples: [305979392]
             max_checkpoints_flops: [0]
@@ -85,7 +85,7 @@ parameters:
         LIST_BUDGET_MAX_SAVE:
           - train_num_samples: [901726208]
             max_checkpoints_flops: [0]
-            epochs: [80, 40, 20, 10, 5]
+            epochs: [5]
             warmup_tokens: [901726208]
           - train_num_samples: [450863104]
             max_checkpoints_flops: [0]
