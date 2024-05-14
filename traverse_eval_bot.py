@@ -33,8 +33,6 @@ def parse_resume_path(resume_path):
 
     return float(flop), int(step), averager
 
-
-
 def eval_ckpt(args, ckpt_path):
     args.resume = ckpt_path
     checkpoint_root = Path(args.resume).parent
@@ -42,9 +40,9 @@ def eval_ckpt(args, ckpt_path):
     checkpoint_path_name = Path(args.resume).name
     args.train_data = None
     if args.data_key == "json.gz":
-        args.val_data = ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/{00000001..00000010}.tar"]# ~141M tokens
+        args.val_data = ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/{00000011..00000020}.tar"]# ~141M tokens
         if "openwebtext2" in args.dataset_manifest:
-            args.val_data = ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/{0000001..00000013}.tar"]
+            args.val_data = ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/{0000014..00000026}.tar"]
     elif args.data_key == "json":
         args.val_data = ["/p/fastdata/mmlaion/lmdata/rpj/shard_{00000000..00000003}.tar"]
     args.ignore_parse_errors = False
@@ -63,7 +61,7 @@ def eval_ckpt(args, ckpt_path):
         tokenizer=None,
         skip_train=True,
     )
-
+        
     metrics = evaluate(model, data, 0, args, None)
     metrics["checkpoint_path"] = args.resume
     metrics["val_data"] = args.val_data
