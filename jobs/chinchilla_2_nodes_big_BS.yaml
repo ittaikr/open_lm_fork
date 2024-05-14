@@ -1,5 +1,5 @@
 job_details:
-  name: CC_2_nodes_orig_short
+  name: CC_2_nodes_rw_BS_256_rerun
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 2
@@ -7,64 +7,52 @@ parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=8_hidden-dim=288']
         LIST_EPOCHS_BUDGET:
-          - train_num_samples: [22487040] 
-            max_checkpoints_flops: [0]
+          - train_num_samples: [18529191] 
             warmup_tokens: [22487040]
             epochs: [80, 40, 20, 10, 5]
-          - train_num_samples: [11243520] 
-            max_checkpoints_flops: [0]
+          - train_num_samples: [9264596] 
             warmup_tokens: [11243520]
             epochs: [5] 
-          - train_num_samples: [5621760] #4632298*2=9264596
-            max_checkpoints_flops: [1]
+          - train_num_samples: [4632298] #4632298*2=9264596
             warmup_tokens: [5621760]
             epochs: [5]
 
       - model: ['layers=9_hidden-dim=320']
         LIST_EPOCHS_BUDGET:
-          - train_num_samples: [28672000] 
-            max_checkpoints_flops: [0]
+          - train_num_samples: [29064360] 
             warmup_tokens: [28672000]
             epochs: [80, 40, 20, 10, 5]
-          - train_num_samples: [14336000] 
-            max_checkpoints_flops: [0]
+          - train_num_samples: [14532180] 
             warmup_tokens: [14336000]
             epochs: [5]
-          - train_num_samples: [7168000] 
-            max_checkpoints_flops: [1]
+          - train_num_samples: [7266090] 
             warmup_tokens: [7168000]
             epochs: [5] 
 
       - model: ['layers=10_hidden-dim=384']
         LIST_SCHED_BUDGET:
-          - train_num_samples: [37060608]
-            max_checkpoints_flops: [0]
+          - train_num_samples: [44971379]
             warmup_tokens: [37060608]
             epochs: [80, 40, 20, 10, 5]
-          - train_num_samples: [18530304]
-            max_checkpoints_flops: [1]
+          - train_num_samples: [22485690]
             warmup_tokens: [18530304]
             epochs: [5]
-          - train_num_samples: [9265152]
-            max_checkpoints_flops: [1]
+          - train_num_samples: [11242845]
             warmup_tokens: [9265152] 
             epochs: [5]
 
       - model: ['layers=12_hidden-dim=480']
         LIST_EPOCHS_BUDGET:
-          - train_num_samples: [57384960]
-            max_checkpoints_flops: [0]
+          - train_num_samples: [58087229]
             warmup_tokens: [57384960] 
             epochs: [80, 40, 20, 10, 5]
-          - train_num_samples: [28692480]
-            max_checkpoints_flops: [0]
+          - train_num_samples: [29043615]
             warmup_tokens: [28692480] 
             epochs: [5]
-          - train_num_samples: [14346240] #2904361*2=5808722
-            max_checkpoints_flops: [1]
+          - train_num_samples: [14521808] #2904361*2=5808722
             warmup_tokens: [14346240]
             epochs: [5]
-
+    max_checkpoints_flops: [1]
     lr: [3.0e-3]
     batch_size: [32]
     accum_freq: [2]

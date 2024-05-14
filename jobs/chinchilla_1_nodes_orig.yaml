@@ -31,7 +31,7 @@ parameters:
           - train_num_samples: [2654626]
             warmup_tokens: [2452480] 
             max_checkpoints_flops: [1]
-          - train_num_samples: [5309252]            
+          - train_num_samples: [5309252]
             warmup_tokens: [4904960] 
             max_checkpoints_flops: [0]
 

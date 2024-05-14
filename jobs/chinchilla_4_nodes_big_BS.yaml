@@ -1,5 +1,5 @@
 job_details:
-  name: CC_4_nodes_big_BS
+  name: CC_4_nodes_rw_BS_256_rerun
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 4
@@ -7,34 +7,28 @@ parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=14_hidden-dim=576']
         LIST_BUDGET_MAX_SAVE:
-          - train_num_samples: [84787200]
-            max_checkpoints_flops: [0]
+          - train_num_samples: [78628221]
             epochs: [80, 40, 20, 10, 5]
             warmup_tokens: [84787200] 
-          - train_num_samples: [42393600]
-            max_checkpoints_flops: [0]
+          - train_num_samples: [39314111]
             epochs: [5]
             warmup_tokens: [42393600]
-          - train_num_samples: [21196800]
-            max_checkpoints_flops: [1]
+          - train_num_samples: [19657056]
             epochs: [5]
             warmup_tokens: [21196800] 
 
       - model: ['layers=15_hidden-dim=640']
         LIST_BUDGET_MAX_SAVE:
-          - train_num_samples: [108462080]
-            max_checkpoints_flops: [0]
+          - train_num_samples: [122930828]
             epochs: [80, 40, 20, 10, 5]
             warmup_tokens: [108462080] 
-          - train_num_samples: [54231040]
-            max_checkpoints_flops: [0]
+          - train_num_samples: [61465414]
             epochs: [5]
             warmup_tokens: [54231040]
-          - train_num_samples: [27115520]
-            max_checkpoints_flops: [1]
+          - train_num_samples: [19657056]
             epochs: [5]
-            warmup_tokens: [27115520] 
-
+            warmup_tokens: [30732707] 
+    max_checkpoints_flops: [1]
     lr: [3.0e-3]
     batch_size: [16]
     lr_cooldown_end: [3.0e-5]
