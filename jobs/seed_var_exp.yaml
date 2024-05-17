@@ -1,33 +1,62 @@
 job_details:
-  name: seed_variance_small_models
-  output_dir: exps
-  num_nodes: 4
-  num_gpus: 1
+  name: seed_variance_rerun
+  output_dir: exps_final_runs
+  num_nodes: 1
+  num_gpus: 4
 parameters:
     accum_freq: [1]
     beta2: [0.99]
     decoupled_wd: [1.0e-4]
-    lr_scheduler: ['cosine', 'const']
+    lr_scheduler: ['const']
     epochs: [10]
     LIST_SCHED_BUDGET:
-      - train_num_samples: [10067822]
+      - train_num_samples: [10346496]
         model: ['layers=3_hidden-dim=96']
         batch_size: [5]
         lr: [1.3e-02]
         lr_cooldown_end: [1.3e-04]
         warmup_tokens: [5173248]
-      - train_num_samples: [13881723]
+        accum_freq: [1]
+
+      - train_num_samples: [15007744]
         model: ['layers=4_hidden-dim=128']
         batch_size: [7]
         lr: [1.15e-02]
         lr_cooldown_end: [1.15e-04]
         warmup_tokens: [7503872]
-      - train_num_samples: [21237007]
+        accum_freq: [1]
+
+      - train_num_samples: [19619840]
         model: ['layers=5_hidden-dim=160']
         batch_size: [8]
         lr: [1.05e-02]
         lr_cooldown_end: [1.05e-04]
         warmup_tokens: [9809920]
+        accum_freq: [1]
+
+      - train_num_samples: [311951360]
+        model: ['layers=6_hidden-dim=224']
+        batch_size: [11]
+        lr: [9.0e-03]
+        lr_cooldown_end: [9.0e-05]
+        warmup_tokens: [15597568]
+        accum_freq: [1]
+
+      - train_num_samples: [573440000]
+        model: ['layers=9_hidden-dim=320']
+        batch_size: [16]
+        lr: [7.4e-03]
+        lr_cooldown_end: [7.4e-05]
+        warmup_tokens: [28672000]
+        accum_freq: [1]
+
+      - train_num_samples: [1147699200]
+        model: ['layers=12_hidden-dim=480']
+        batch_size: [26]
+        lr: [1.05e-02]
+        lr_cooldown_end: [1.05e-04]
+        warmup_tokens: [57384960]
+        accum_freq: [2]
 
 
     dataset_resampled: [false]
