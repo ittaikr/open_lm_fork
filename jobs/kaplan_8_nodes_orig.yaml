@@ -1,5 +1,5 @@
 job_details:
-  name: kaplan_8_nodes_openwebtext2
+  name: kaplan_8_nodes_owt2_one_pass
   output_dir: exps_final_runs
   num_gpus: 4
   num_nodes: 8
@@ -29,7 +29,7 @@ parameters:
         max_tokens: [4805597636] 
         warmup_tokens: [901726208, 1572864000]
 
-    train_num_samples: [436906667]
+    train_num_samples: [819200000]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     batch_size: [8]
@@ -49,7 +49,7 @@ parameters:
     log_avg_model_training_loss: [20]
     wd: [0.033]
     lr: [3.0e-03] 
-    epochs: [300]
+    epochs: [160]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
     workers: [2]
@@ -58,4 +58,4 @@ parameters:
     max_checkpoints_flops: [9]
     # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
     dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/manifest_train.jsonl"]
-    multiple_data_passes: [true]
+    # multiple_data_passes: [true]

@@ -138,3 +138,5 @@ weights*
 out*
 *.tar
 exps*
+
+*.csv
