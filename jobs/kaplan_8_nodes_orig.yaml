@@ -26,10 +26,11 @@ parameters:
         warmup_tokens: [611958784, 1572864000]
 
       - model: ['layers=30_hidden-dim=1504']
-        max_tokens: [4805597636] 
+        max_tokens: [4805597636]
         warmup_tokens: [901726208, 1572864000]
-
-    train_num_samples: [1627389952]
+    
+    cosine_half_period_tokens: [131072000000] # as in kaplan
+    train_num_samples: [21139292160]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     batch_size: [8]
@@ -45,11 +46,11 @@ parameters:
     data_key: ['json.gz']
     qk_norm: [true]
     z_loss_coefficient: [0.0001]
-    lr_scheduler: ['cosine']
+    lr_scheduler: ['cosine-target']
     log_avg_model_training_loss: [20]
     wd: [0.033]
     lr: [3.0e-03] 
-    epochs: [80]
+    epochs: [1]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
     workers: [2]

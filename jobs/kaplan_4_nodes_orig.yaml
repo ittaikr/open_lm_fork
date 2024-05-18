@@ -13,7 +13,8 @@ parameters:
         max_tokens: [21156069376]
         warmup_tokens: [108462080, 1572864000]
 
-    train_num_samples: [1627389952]
+    cosine_half_period_tokens: [131072000000] # as in kaplan
+    train_num_samples: [21139292160]
     dataset_resampled: [false]
     precision: ['amp_bfloat16']
     batch_size: [8] # global batch size is 8*4*4 = 128
@@ -33,7 +34,7 @@ parameters:
     log_avg_model_training_loss: [20]
     wd: [0.033]
     lr: [2.12e-03] 
-    epochs: [80]
+    epochs: [1]
     wandb_project_name: ['lm_grid_160m_more_avgs']
     delete_previous_checkpoint: [true]
     workers: [2]
