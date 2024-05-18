@@ -375,7 +375,7 @@ def parse_args(args):
         default=None,
         help="maximum number of tokens that the model can see.",
     )
-    parser.add_argument("--target-tokens",
+    parser.add_argument("--cosine-half-period-tokens",
         type=int,
         default=None,
         help="maximum number of tokens for scheduler.",
