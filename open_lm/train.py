@@ -116,6 +116,10 @@ def train_one_epoch(
         if not args.skip_scheduler:
             scheduler(step)
 
+        if args.max_tokens is not None and  step >= args.max_tokens // (args.batch_size * args.world_size):
+            logging.warning(f"step: {step} has reached/exceeded total_steps: {args.max_tokens // (args.batch_size * args.world_size)}. ending training.")
+            break
+
         if step >= total_steps:
             logging.warning(f"step: {step} has reached/exceeded total_steps: {total_steps}. ending training.")
             break

@@ -671,6 +671,15 @@ def main(args):
                 args.lr_cooldown_end,
                 args.force_min_lr,
             )
+        elif args.lr_scheduler == "cosine_target":
+            scheduler = cosine_lr(
+                optimizer,
+                args.lr,
+                args.warmup,
+                args.target_tokens / (args.batch_size * args.world_size),
+                args.lr_cooldown_end,
+                args.force_min_lr,
+            )
         elif args.lr_scheduler == "hybrid":
             scheduler = hybrid_cosine_rsqrt(
                 optimizer,

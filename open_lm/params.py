@@ -375,6 +375,11 @@ def parse_args(args):
         default=None,
         help="maximum number of tokens that the model can see.",
     )
+    parser.add_argument("--target-tokens",
+        type=int,
+        default=None,
+        help="maximum number of tokens for scheduler.",
+    )
     parser.add_argument("--remote-sync",
         type=str,
         default=None,
