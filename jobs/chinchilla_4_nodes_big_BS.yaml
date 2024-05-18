@@ -7,8 +7,8 @@ parameters:
     LIST_MODEL_TOKENS:
       - model: ['layers=14_hidden-dim=576']
         LIST_BUDGET_MAX_SAVE:
-          - train_num_samples: [78628221]
-            epochs: [80, 40, 20, 10, 5]
+          - train_num_samples: [6290257680, 3145128840, 1572564420, 786282210, 393141105, 196570552, 98285276]
+            epochs: [1]
             warmup_tokens: [84787200] 
           - train_num_samples: [39314111]
             epochs: [5]
@@ -55,6 +55,7 @@ parameters:
     delete_previous_checkpoint: [true]
     workers: [2]
     flops_to_save: ['3.125e+15,6.250e+15,1.250e+16,2.500e+16,5.000e+16,1.000e+17,2.000e+17,4.000e+17,8.000e+17,1.600e+18,3.200e+18,6.400e+18,1.280e+19,2.560e+19,5.120e+19,1.024e+20']
-    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
-    # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/manifest_train.jsonl"]
+    # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
+    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/filtered_manifest_train.jsonl"]
+
     multiple_data_passes: [true]
