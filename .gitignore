@@ -140,3 +140,6 @@ out*
 exps*
 
 *.csv
+*.jsonl
+
+./varify_manifest.py
