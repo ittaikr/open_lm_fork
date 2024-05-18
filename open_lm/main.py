@@ -647,6 +647,8 @@ def main(args):
 
     # create scheduler if train
     scheduler = None
+    if args.max_tokens is None and args.cosine_half_period_tokens is not None:
+        args.max_tokens = args.cosine_half_period_tokens
     if args.warmup_tokens is not None:
             args.warmup = args.warmup_tokens // (
                 args.batch_size * args.world_size * args.seq_len
@@ -661,8 +663,6 @@ def main(args):
             cooldown_steps = (data["train"].dataloader.num_batches) * args.epochs_cooldown if args.epochs_cooldown is not None else None
         if args.schedulefree: # schedulefree, so no scheduler
             pass
-        if args.max_tokens is None and args.cosine_half_period_tokens is not None:
-            args.max_tokens = args.cosine_half_period_tokens
         elif args.lr_scheduler == "cosine":
             scheduler = cosine_lr(
                 optimizer,
@@ -672,7 +672,7 @@ def main(args):
                 args.lr_cooldown_end,
                 args.force_min_lr,
             )
-        elif args.lr_scheduler == "cosine-half-period-tokens":
+        elif args.lr_scheduler == "cosine-target":
             scheduler = cosine_lr(
                 optimizer,
                 args.lr,
