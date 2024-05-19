@@ -99,10 +99,11 @@ if __name__ == '__main__':
         job_details = job_description['job_details']
         output_dir = job_details['output_dir']
         # num_nodes = job_details['num_nodes']
-        if 'num_gpus' in job_details or 'num_nodes' in job_details:
-            num_gpus = job_details['num_gpus']
-            num_nodes = job_details['num_nodes']
-            args.script = get_slurm_script(num_nodes, num_gpus)
+        if not args.script:
+            if 'num_gpus' in job_details or 'num_nodes' in job_details:
+                num_gpus = job_details['num_gpus']
+                num_nodes = job_details['num_nodes']
+                args.script = get_slurm_script(num_nodes, num_gpus)
         batch_name = datetime.datetime.now().strftime('%y-%m-%d') + '-' + job_details['name']
         batch_dir = os.path.join(output_dir, batch_name)
     else:
@@ -211,7 +212,7 @@ if __name__ == '__main__':
         # print("Running command: ", f'sbatch --job-name={spec_name} --output={out_path} --error={out_path} {args.script} {specs}')
         cmd = f'sbatch --job-name={spec_name} --output={out_path} --error={out_path} {args.script} {specs} {spec_name} {batch_dir}'
         if args.dry_run:
-            # print(f'Would now run "{cmd}"')
+            print(f'Would now run "{cmd}"')
             if args.rerun:
                 with open(os.path.join(out_dir, 'spec.yaml'), 'r') as f:
                     prev_config = yaml.safe_load(f)
