@@ -23,7 +23,7 @@ except ImportError:
 
 from .distributed import is_master
 from .precision import get_autocast
-import schedulefree
+#import schedulefree
 
 from .saving_utils import save_checkpoint_step
 
@@ -92,8 +92,10 @@ def train_one_epoch(
         losses_schedfree = 0
         losses_schedfree_m = AverageMeter()
     losses_m = AverageMeter()
+    losses_m_ret = AverageMeter()
     if args.z_loss_coefficient != 0.0:
         z_losses_m = AverageMeter()
+        z_losses_m_ret = AverageMeter()
     if averagers is not None and args.log_avg_model_training_loss:
         losses_avg_m = {key: AverageMeter() for key in averagers.avgs_dict.keys()}
         local_avg_losses = {}
@@ -101,9 +103,12 @@ def train_one_epoch(
         local_tuple_loss_avg = {}
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
+    batch_time_m_ret = AverageMeter()
+    data_time_m_ret = AverageMeter()
 
     # used only if --log-logit-mean flag is passed
     logit_m = AverageMeter()
+    logit_m_ret = AverageMeter()
 
     end = time.time()
 
@@ -213,6 +218,7 @@ def train_one_epoch(
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
         data_time_m.update(time.time() - end)
+        data_time_m_ret.update(time.time() - end)
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
@@ -221,6 +227,7 @@ def train_one_epoch(
                 out, _ = model(inputs)
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
+                    logit_m_ret.update(torch.mean(out).item())
                 tuple_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
                 total_loss = tuple_loss[1] if args.z_loss_coefficient != 0.0 else tuple_loss
                 total_zloss = tuple_loss[0] if args.z_loss_coefficient != 0.0 else None
@@ -333,6 +340,7 @@ def train_one_epoch(
         if averagers is not None:
             averagers.step()
         batch_time_m.update(time.time() - end)
+        batch_time_m_ret.update(time.time() - end)
         end = time.time()
 
         step += 1
@@ -362,8 +370,10 @@ def train_one_epoch(
             batch_size = len(inputs)
             # update the loss meter with the global loss tensor every iteration
             losses_m.update(global_loss_tensor.item(), batch_size)
+            losses_m_ret.update(global_loss_tensor.item(), batch_size)
             if args.z_loss_coefficient != 0.0:
                 z_losses_m.update(global_zloss_tensor.item(), batch_size)
+                z_losses_m_ret.update(global_zloss_tensor.item(), batch_size)
             if log_avg(args, step):
                 if args.schedulefree:
                     losses_schedfree_m.update(losses_schedfree.item(), batch_size)
@@ -377,8 +387,92 @@ def train_one_epoch(
             if np.any( (curr_flops >= args.flops_to_save) & (prev_flops < args.flops_to_save) ):
                 save_checkpoint_step(args, model, curr_flops, epoch, averagers, step)
                 logging.info(f"Saved model as it reached {curr_flops} FLOPs")
+        
+        
 
-    return step
+        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
+            batch_size = len(inputs)
+            num_samples = batch_count * batch_size * args.world_size
+            samples_per_epoch = dataloader.num_samples
+            percent_complete = 100.0 * batch_count / num_batches_per_epoch
+
+            samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
+            samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
+            logging.info(
+                f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
+                f"Loss: {losses_m.avg:.3f} "
+                f"Data (t): {data_time_m.avg:.3f} "
+                f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
+                f"LR: {optimizer.param_groups[0]['lr']:5f} "
+            )
+
+            # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
+            log_data = {
+                "loss": losses_m.avg,
+                "data_time": data_time_m.avg,
+                "batch_time": batch_time_m.avg,
+                "samples_per_second": samples_per_second,
+                "samples_per_second_per_gpu": samples_per_second_per_gpu,
+                "lr": optimizer.param_groups[0]["lr"],
+                "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+            }
+            if args.z_loss_coefficient != 0.0:
+                log_data["z_loss"] = z_losses_m.avg
+            if log_avg(i, num_batches_per_epoch):
+                if averagers is not None:
+                    for key, value in losses_avg_m.items():
+                        log_data[key + "_loss"] = value.avg
+                if args.schedulefree:
+                    log_data["schedfree_loss"] = losses_schedfree_m.avg
+            if args.log_logit_mean:
+                log_data["logit_mean"] = logit_m.val
+
+            for name, val in log_data.items():
+                name = "train/" + name
+                if tb_writer is not None:
+                    tb_writer.add_scalar(name, val, step)
+                if args.wandb:
+                    assert wandb is not None, "Please install wandb."
+                    wandb.log({name: val, "step": step, "tokens": log_data["tokens"]})
+            if csv_path is not None:
+                # if the file does not exist, (which is the case for the first iteration) we need to write the header
+                rowd = OrderedDict(epoch=epoch, step=step)
+                rowd.update([("train/" + k, v) for k, v in log_data.items()])
+                if not os.path.exists(csv_path):
+                    with open(csv_path, "w") as f:
+                        dict_writer = DictWriter(f, fieldnames=rowd.keys())
+                        dict_writer.writeheader()
+                # delete all rows with epoch <= current epoch
+                with open(csv_path, "a") as f:
+                    dict_writer = DictWriter(f, fieldnames=rowd.keys())
+                    dict_writer.writerow(rowd)
+
+
+            # resetting batch / data time meters per log window
+            batch_time_m.reset()
+            data_time_m.reset()
+            # reset all average meters
+            losses_m.reset()
+            if args.z_loss_coefficient != 0.0:
+                z_losses_m.reset()
+            if averagers is not None and log_avg(i, num_batches_per_epoch):
+                for k in averagers.avgs_dict.keys():
+                    losses_avg_m[k].reset()
+            if args.schedulefree:
+                losses_schedfree_m.reset()
+
+    log_data = {
+            "loss": losses_m_ret.avg,
+            "data_time": data_time_m_ret.avg,
+            "time": batch_time_m_ret.avg,
+            "learning_rate": optimizer.param_groups[0]["lr"],
+            "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+        }
+
+    if hasattr(optimizer, 'get_stats'):
+        log_data.update(optimizer.get_stats())
+
+    return step,log_data        
     # end for
 
 def evaluate(model, data, start_epoch, args, writer):
@@ -412,13 +506,17 @@ def evaluate(model, data, start_epoch, args, writer):
 
         data_time_m.update(time.time() - end)
 
-        with autocast():
-            with torch.no_grad():
-                inputs = texts[:, : args.seq_len - 1]
-                targets = texts[:, 1 : args.seq_len]
-                out, _ = model(inputs)
-                total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
-                losses_m.update(total_loss.item(), inputs.shape[0])
+        batch_size = len(texts) // args.val_freq
+        for ii in range(args.val_freq):
+            with autocast():
+                with torch.no_grad():
+                    inputs = texts[ii * batch_size : (ii+1) * batch_size , : args.seq_len - 1]
+                    targets = texts[ii * batch_size : (ii+1) * batch_size , 1 : args.seq_len]
+                    out, _ = model(inputs)
+                    total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                    losses_m.update(total_loss.item(), inputs.shape[0])
+
+        inputs = texts[:, : args.seq_len - 1]
         batch_time_m.update(time.time() - end)
         sps_m.update(inputs.numel() * args.world_size / batch_time_m.val)
         spspg_m.update(inputs.numel() / batch_time_m.val)
@@ -430,18 +528,18 @@ def evaluate(model, data, start_epoch, args, writer):
                 f"Data (t): {data_time_m.avg:.3f} "
                 f"Batch (t): {batch_time_m.avg:.3f}, {sps_m.avg:#g}/s, {spspg_m.avg:#g}/s/gpu "
             )
-            if i == 0:
-                metrics["loss"] = [losses_m.avg]
-                metrics["tokens"] = [(i + 1) * args.batch_size * args.seq_len]
-            else:
-                metrics["loss"].append(losses_m.avg)
-                metrics["tokens"].append((i + 1) * args.batch_size * args.seq_len)
-            # reset
-            batch_time_m.reset()
-            data_time_m.reset()
-            losses_m.reset()
-            sps_m.reset()
-            spspg_m.reset()
+            # if i == 0:
+            #     metrics["loss"] = [losses_m.avg]
+            #     metrics["tokens"] = [(i + 1) * args.batch_size * args.seq_len]
+            # else:
+            #     metrics["loss"].append(losses_m.avg)
+            #     metrics["tokens"].append((i + 1) * args.batch_size * args.seq_len)
+            # # reset
+            # batch_time_m.reset()
+            # data_time_m.reset()
+            # losses_m.reset()
+            # sps_m.reset()
+            # spspg_m.reset()
     print('final step is', i, 'so num of tokens in validation set is', (i + 1) * args.batch_size * args.seq_len * args.world_size)
     # Save eval loss / etc.
     log_data = {
@@ -452,6 +550,11 @@ def evaluate(model, data, start_epoch, args, writer):
         "samples_per_second_per_gpu": spspg_m.avg,
         "tokens": start_epoch * args.train_num_samples * args.seq_len,
     }
+
+    metrics["loss"] = losses_m.avg
+    metrics["tokens"] = (i + 1) * args.batch_size * args.seq_len
+    metrics["data_time"] = data_time_m.avg
+    metrics["batch_time"] = batch_time_m.avg
 
     for name, val in log_data.items():
         name = "valid/" + name

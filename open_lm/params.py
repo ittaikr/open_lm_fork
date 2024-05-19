@@ -476,7 +476,7 @@ def parse_args(args):
     )
     # log_avg_model_training_loss
     # args_config, remaining = config_parser.parse_known_args()
-    args = parser.parse_args()
+    args = parser.parse_args(args=args)
     if args.config:
         with open(args.config, 'r') as f:
             cfg = yaml.safe_load(f)

@@ -63,7 +63,10 @@ from .file_utils import (
 
 from .utils.average_utils import ModelAverager
 
-import schedulefree
+from optimizers import DoG
+from accele_dog import AcceleDoG
+
+#import schedulefree
 
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
 
@@ -211,7 +214,7 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
             cpu_state = model.state_dict()
             optim_state = FSDP.optim_state_dict(model, optimizer)
 
-    if args.save_logs:
+    if args.save_logs and args.save_checkpoint:
         checkpoint_dict_model = {
             "epoch": completed_epoch,
             "name": args.name,
@@ -584,6 +587,11 @@ def main(args):
 
     if args.train_data or (args.dataset_manifest is not None):
         named_parameters = list(model.named_parameters())
+
+        for idx, (name, p) in enumerate(named_parameters):
+            p.id_number = idx
+            p.to_normalize = False
+
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
         if args.decoupled_wd is not None:
@@ -600,24 +608,57 @@ def main(args):
                 eps=args.eps,
                 warmup_steps=args.warmup,
             )
-            scaler = None
-            if args.precision == "amp":
-                assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
-                scaler = GradScaler()
         else:
-            optimizer = optim.AdamW(
-                [
-                    {"params": no_decay_params, "weight_decay": 0.0},
-                    {"params": params, "weight_decay": args.wd},
-                ],
-                lr=args.lr,
-                betas=(args.beta1, args.beta2),
-                eps=args.eps,
-            )
-            scaler = None
-            if args.precision == "amp":
-                assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
-                scaler = GradScaler()
+            if args.optim_alg is None or args.optim_alg in ['adamw']:
+                optimizer = optim.AdamW(
+                    [
+                        {"params": no_decay_params, "weight_decay": 0.0},
+                        {"params": params, "weight_decay": args.wd},
+                    ],
+                    lr=args.lr,
+                    betas=(args.beta1, args.beta2),
+                    eps=args.eps,
+                )
+            elif args.optim_alg in ['dog']:
+                optimizer = DoG(params, lr=args.lr,
+                        #init_dist_abs=args.dog_init_dist_abs,
+                        init_dist_rel=args.dog_init_dist_rel,
+                        granularity=args.dog_granularity,
+                        weight_decay=args.wd,
+                        #phase_start_factor=args.dog_phase_start_factor,
+                        #theta_1=args.dog_theta_1,
+                        #theta_2=args.dog_theta_2,
+                        #discount_p=args.dog_discount_p,
+                        #proximal_reg=args.dog_proximal_reg,
+                        #safe_lr=args.dog_safe_lr,
+                        decay_to_init=args.dog_decay_to_init,
+                        decouple_decay=args.decouple_decay,
+                        decay_factor=args.decay_factor,
+                        eps=args.eps,)
+            elif args.optim_alg in ['accele_dog']:
+                if args.dog_granularity != 'all':
+                    params = [{'params': [p]} for p in params]
+                optimizer = AcceleDoG(params, lr=args.lr,
+                        #alpha_const=args.alpha_const,
+                        reps_rel=args.dog_init_dist_rel,
+                        #init_eta=args.dog_init_eta if args.dog_init_eta > 0 else None,
+                        granularity=args.dog_granularity,
+                        weight_decay=args.wd,
+                        decay_to_init=args.dog_decay_to_init,
+                        #opt_ver=args.opt_ver,
+                        #alpha_ver=args.alpha_ver,
+                        #step_size_ver=args.step_size_ver,
+                        #momentum=momentum,
+                        decouple_decay=args.decouple_decay,
+                        decay_factor=args.decay_factor,
+                        eps=args.eps,)
+            else:
+                assert False, "optimizer %s not supported" % args.optim_alg
+
+        scaler = None
+        if args.precision == "amp":
+            assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
+            scaler = GradScaler()
 
     # optionally resume optimizer from a checkpoint
     if args.resume is not None:
@@ -739,8 +780,20 @@ def main(args):
     if args.save_logs and args.tensorboard:
         assert tensorboard is not None, "Please install tensorboard."
         writer = tensorboard.SummaryWriter(args.tensorboard_path)
+
+    paths = []
     if args.save_logs and args.csv_log:
         csv_path = os.path.join(args.logs, args.name, "summary.csv")
+        paths.append(csv_path)
+    if "val" in data:
+        csv_path_eval = os.path.join(args.logs, args.name, "summary_eval.csv")
+        paths.append(csv_path_eval)
+    csv_path_stats = os.path.join(args.logs, args.name, "stats_eval.csv")
+    paths.append(csv_path_stats)
+    for path in paths:
+        if os.path.exists(path):
+            os.remove(path)
+
     if args.wandb and is_master(args):
         os.environ["WANDB_MODE"]="offline"
 
@@ -844,7 +897,7 @@ def main(args):
         prev_step = global_step
         if args.world_size > 1:
             dist.barrier()
-        global_step = train_one_epoch(
+        global_step, train_metrics = train_one_epoch(
             model,
             data,
             loss,
@@ -870,32 +923,53 @@ def main(args):
         epoch = epoch + 1
 
         evaluation_loss = -1
+        metrics = {}
         if "val" in data:
+            metric_key = 'last'
 
-            csv_path_eval = os.path.join(args.logs, args.name, "summary_eval.csv")
-            metrics = evaluate(model, data, completed_epoch, args, writer)
-            metrics["val_data"] = args.val_data
-            metrics["model"] = args.model
-            metrics["average"] = 'none'
-            metrics["epoch"] = completed_epoch
-            evaluation_loss = metrics["loss"]
+            metrics[metric_key] = evaluate(model, data, completed_epoch, args, writer)
+            metrics[metric_key]["val_data"] = args.val_data
+            metrics[metric_key]["model"] = args.model
+            metrics[metric_key]["average"] = 'none'
+            metrics[metric_key]["epoch"] = completed_epoch
+            evaluation_loss = metrics[metric_key]["loss"]
 
             # write the metrics to a file called summary_eval.csv
             if args.save_logs and args.csv_log and is_master(args):
                 with open(csv_path_eval, "a") as f:
                     if epoch == 0:
-                        f.write(",".join(metrics.keys()) + "\n")
-                    f.write(",".join([str(v) for v in metrics.values()]) + "\n")
+                        f.write(",".join(metrics[metric_key].keys()) + "\n")
+                    f.write(",".join([str(v) for v in metrics[metric_key].values()]) + "\n")
             if averagers is not None:
                 for k in averagers.avgs_dict.keys():
-                    metrics = evaluate(averagers.avgs_dict[k].av_model, data, completed_epoch, args, writer)
-                    metrics["val_data"] = args.val_data
-                    metrics["model"] = args.model
-                    metrics["average"] = k
-                    metrics["epoch"] = completed_epoch
+                    metrics[k] = evaluate(averagers.avgs_dict[k].av_model, data, completed_epoch, args, writer)
+                    metrics[k]["val_data"] = args.val_data
+                    metrics[k]["model"] = args.model
+                    metrics[k]["average"] = k
+                    metrics[k]["epoch"] = completed_epoch
                     if args.save_logs and args.csv_log and is_master(args):
                         with open(csv_path_eval, "a") as f:
-                            f.write(",".join([str(v) for v in metrics.values()]) + "\n")
+                            f.write(",".join([str(v) for v in metrics[k].values()]) + "\n")
+        
+
+        joint_metrics = {}
+        for k in train_metrics.keys():
+            joint_metrics["train/" + k] = train_metrics[k]
+        for averager in metrics.keys():
+            for k in metrics[averager].keys():
+                joint_metrics["test/" + averager + '/' + k] = metrics[averager][k]
+        epoch_keys = []
+        for k in joint_metrics.keys():
+            if k.endswith('/epoch'):
+                epoch_keys.append(k)
+        for k in epoch_keys:
+            joint_metrics.pop(k)
+
+        csv_path_stats = os.path.join(args.logs, args.name, "stats_eval.csv")
+        with open(csv_path_stats, "a") as f:
+            if epoch == 0:
+                f.write("," + ",".join(joint_metrics.keys()) + "\n")
+            f.write(str(epoch) + "," +  ",".join([str(joint_metrics[k]) for k in joint_metrics.keys()]) + "\n")
 
         if args.max_tokens is not None:
             tokens_seen = samples_seen * args.seq_len
