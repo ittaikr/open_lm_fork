@@ -111,7 +111,7 @@ def train_one_epoch(
     batch_count = 0
 
     if args.max_tokens is not None:
-        total_steps = min(total_steps, args.max_tokens // (args.batch_size * args.world_size) + 1)
+        total_steps = min(total_steps, args.max_tokens // (args.batch_size * args.world_size * args.seq_len) + 1)
 
     for i in itertools.count():
 

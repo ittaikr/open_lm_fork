@@ -677,7 +677,7 @@ def main(args):
                 optimizer,
                 args.lr,
                 args.warmup,
-                args.cosine_half_period_tokens // (args.batch_size * args.world_size) + 1,
+                args.cosine_half_period_tokens // (args.batch_size * args.world_size * args.seq_len) + 1,
                 args.lr_cooldown_end,
                 args.force_min_lr,
             )
