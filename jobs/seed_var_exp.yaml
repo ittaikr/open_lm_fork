@@ -1,5 +1,5 @@
 job_details:
-  name: seed_variance_rerun
+  name: seed_variance_owt
   output_dir: exps_final_runs
   num_nodes: 1
   num_gpus: 4
@@ -76,7 +76,8 @@ parameters:
     log_avg_model_training_loss: [20]
     delete_previous_checkpoint: [true]
     workers: [2]
-    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
+    # dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/refined_web_tokenized/manifest_train.jsonl"]
+    dataset_manifest: ["/p/fastdata/mmlaion/lmdata_2/openwebtext2_tokenized/filtered_manifest_train.jsonl"]
     flops_to_save: ['2.00e+15,4.00e+15,8.00e+15,1.60e+16,3.20e+16,6.40e+16,1.28e+17,2.56e+17,5.12e+17,1.02e+18,2.05e+18,4.10e+18,8.19e+18,1.64e+19,3.28e+19,6.55e+19']
     max_checkpoints_flops: [3]
 

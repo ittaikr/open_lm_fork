@@ -21,7 +21,7 @@
 ml purge
 
 CONDA_ENV="py9"
-source /p/project/ccstdl/porian1/miniconda3/bin/activate ${CONDA_ENV}
+source /p/project1/ccstdl/porian1/miniconda3/bin/activate ${CONDA_ENV}
 
 export NCCL_IB_TIMEOUT=50
 export UCX_RC_TIMEOUT=4s
@@ -35,7 +35,7 @@ export MASTER_PORT=12802
 master_addr=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
 export MASTER_ADDR=$master_addr"i"
 
-OPEN_CLIP_HOME="/p/project/ccstdl/$USER/open_lm_fork"
+OPEN_CLIP_HOME="/p/project1/ccstdl/$USER/open_lm_fork"
 export PYTHONPATH="$PYTHONPATH:${OPEN_CLIP_HOME}"
 cd ${OPEN_CLIP_HOME}
 

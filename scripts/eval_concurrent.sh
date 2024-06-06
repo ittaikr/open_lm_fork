@@ -10,7 +10,7 @@
 #SBATCH --time=6:00:00 
 #SBATCH --job-name=openlm_eval
 
-OPEN_CLIP_HOME="/p/project/ccstdl/$USER/open_lm_fork"
+OPEN_CLIP_HOME="/p/project1/ccstdl/$USER/open_lm_fork"
 export PYTHONPATH="$PYTHONPATH:${OPEN_CLIP_HOME}"
 
 cd ${OPEN_CLIP_HOME}

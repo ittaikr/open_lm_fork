@@ -21,7 +21,7 @@ ml purge
 # CONDA_ENV="open_clip"
 CONDA_ENV="py9"
 
-source /p/project/ccstdl/porian1/miniconda3/bin/activate ${CONDA_ENV}
+source /p/project1/ccstdl/porian1/miniconda3/bin/activate ${CONDA_ENV}
 
 
 # export NCCL_DEBUG=INFO
@@ -45,7 +45,7 @@ export MASTER_ADDR=$master_addr"i"
 echo "MASTER_ADDR="$MASTER_ADDR
 
 
-OPEN_CLIP_HOME="/p/project/ccstdl/$USER/open_lm_fork"
+OPEN_CLIP_HOME="/p/project1/ccstdl/$USER/open_lm_fork"
 export PYTHONPATH="$PYTHONPATH:${OPEN_CLIP_HOME}"
 
 cd ${OPEN_CLIP_HOME}
