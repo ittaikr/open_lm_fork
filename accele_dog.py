@@ -22,7 +22,7 @@ class AcceleDoG(Optimizer):
 
     def __init__(self, params, reps_rel: float = 1e-6, lr: float = 1.0, alpha_const: float = 0.5,
                  weight_decay: float = 0.0, decay_to_init: bool = False, eps: float = 1e-8, init_eta: Optional[float] = None,
-                 granularity='all', opt_ver: int = 1, alpha_ver: int = 1, step_size_ver: int = 1, momentum: float = 0.9, decouple_decay: bool = False, decay_factor: float = None):
+                 granularity='all', opt_ver: int = 1, alpha_ver: int = 1, step_size_ver: int = 1, momentum: float = None, decouple_decay: bool = False, decay_factor: float = None):
         r"""Distance over Gradients - an adaptive stochastic optimizer.
         DoG updates parameters x_t with stochastic gradients g_t according to:
         .. math::
@@ -56,6 +56,9 @@ class AcceleDoG(Optimizer):
         __ https://arxiv.org/pdf/2302.12022.pdf
         """
 
+        if momentum is None:
+            momentum = 1.0
+
         if lr <= 0.0:
             raise ValueError(f'Invalid learning rate ({lr}). Suggested value is 1.')
         if lr != 1.0:
@@ -84,7 +87,7 @@ class AcceleDoG(Optimizer):
             alpha_const = 1.
 
         defaults = dict(reps_rel=reps_rel, lr=lr, alpha_const=alpha_const, weight_decay=weight_decay, decay_to_init=decay_to_init, eps=eps, init_eta=init_eta,
-                            momentum=momentum, decouple_decay=decouple_decay, decay_factor=decay_factor, x_decay_factor=1.0, w_decay_factor=1.0)
+                            momentum=momentum, decouple_decay=decouple_decay, decay_factor=decay_factor, x_decay_factor=[1.0]*len(params), w_decay_factor=[1.0]*len(params))
         super(AcceleDoG, self).__init__(params, defaults)
 
     def __setstate__(self, state):
@@ -99,10 +102,10 @@ class AcceleDoG(Optimizer):
             alpha = []
             sum_alpha_r = []
             for group in self.param_groups:
-                rbar.append(group['rbar'].item())
-                eta.append(group['eta_y'][0].item())
-                alpha.append(group['alpha'].item())
-                sum_alpha_r.append(group['sum_alpha_r'].item())
+                rbar.append((group['rbar'][0].norm()).item())
+                eta.append((group['eta_y'][0].sum()/group['eta_y'][0].numel()).item())
+                alpha.append((group['alpha'][0].sum()/group['alpha'][0].numel()).item())
+                sum_alpha_r.append((group['sum_alpha_r'][0].sum()/group['sum_alpha_r'][0].numel()).item())
 
             return dict(rbar = np.array(rbar),
                 eta = np.array(eta),
@@ -110,68 +113,68 @@ class AcceleDoG(Optimizer):
                 sum_alpha_r=np.array(sum_alpha_r))
         else:
             for group in self.param_groups:
-                return dict(rbar = group['rbar'].item(),
-                    rbar_x = group['rbar_x'].item(),
-                    rbar_y = group['rbar_y'].item(),
-                    rbar_w = group['rbar_w'].item(),
+                return dict(rbar = group['rbar'][0].item(),
+                    rbar_x = group['rbar_x'][0].item(),
+                    rbar_y = group['rbar_y'][0].item(),
+                    rbar_w = group['rbar_w'][0].item(),
                     eta = group['eta_y'][0].item(),
                     #eta_w = group['eta_w'][0].item(),
-                    alpha = group['alpha'].item(),
-                    sum_alpha_r=group['sum_alpha_r'].item())
+                    alpha = group['alpha'][0].item(),
+                    sum_alpha_r=group['sum_alpha_r'][0].item())
 
-    @torch.no_grad()
-    def get_average_weight(self):
-        y_bar = {}
-        for group in self.param_groups:
-            for p in group['y_bar']:
-                y_bar[p.id_number] = p.clone().detach_()
-        return y_bar
+    # @torch.no_grad()
+    # def get_average_weight(self):
+    #     y_bar = {}
+    #     for group in self.param_groups:
+    #         for p in group['y_bar']:
+    #             y_bar[p.id_number] = p.clone().detach_()
+    #     return y_bar
 
-    @torch.no_grad()
-    def get_y(self):
-        y = {}
-        for group in self.param_groups:
-            for p in group['y']:
-                y[p.id_number] = p.clone().detach_()
-        return y
+    # @torch.no_grad()
+    # def get_y(self):
+    #     y = {}
+    #     for group in self.param_groups:
+    #         for p in group['y']:
+    #             y[p.id_number] = p.clone().detach_()
+    #     return y
 
-    @torch.no_grad()
-    def get_w(self):
-        w = {}
-        for group in self.param_groups:
-            for p in group['w']:
-                w[p.id_number] = p.clone().detach_()
-        return w
+    # @torch.no_grad()
+    # def get_w(self):
+    #     w = {}
+    #     for group in self.param_groups:
+    #         for p in group['w']:
+    #             w[p.id_number] = p.clone().detach_()
+    #     return w
 
-    @torch.no_grad()
-    def get_x(self):
-        x = {}
-        for group in self.param_groups:
-            for p in group['params']:
-                x[p.id_number] = p.clone().detach_()
-        return x
+    # @torch.no_grad()
+    # def get_x(self):
+    #     x = {}
+    #     for group in self.param_groups:
+    #         for p in group['params']:
+    #             x[p.id_number] = p.clone().detach_()
+    #     return x
 
-    @torch.no_grad()
-    def get_gamma(self, idx=0):
-        idx = idx % len(self.param_groups)
-        for i, group in enumerate(self.param_groups):
-            if not i == idx:
-                continue
-            alpha_r, sum_alpha_r = group['alpha'] * group['rbar'], group['sum_alpha_r']
-            return alpha_r / sum_alpha_r
+    # @torch.no_grad()
+    # def get_gamma(self, idx=0):
+    #     idx = idx % len(self.param_groups)
+    #     for i, group in enumerate(self.param_groups):
+    #         if not i == idx:
+    #             continue
+    #         alpha_r, sum_alpha_r = group['alpha'] * group['rbar'], group['sum_alpha_r']
+    #         return alpha_r / sum_alpha_r
 
-        assert False
+    #     assert False
 
-    @torch.no_grad()
-    def average_step(self, group):
-        if self.save_y:
-            for y, p in zip(group['y'], group['params']):
-                y.copy_( p )
+    # @torch.no_grad()
+    # def average_step(self, group):
+    #     if self.save_y:
+    #         for y, p in zip(group['y'], group['params']):
+    #             y.copy_( p )
 
-        alpha_r, sum_alpha_r = group['alpha'] * group['rbar'], group['sum_alpha_r']
-        for y_bar, y in zip(group['y_bar'], group['params']):
-            y_bar.mul_( 1 - (alpha_r / sum_alpha_r) )
-            y_bar.add_( (alpha_r / sum_alpha_r) * y )
+    #     alpha_r, sum_alpha_r = group['alpha'] * group['rbar'], group['sum_alpha_r']
+    #     for y_bar, y in zip(group['y_bar'], group['params']):
+    #         y_bar.mul_( 1 - (alpha_r / sum_alpha_r) )
+    #         y_bar.add_( (alpha_r / sum_alpha_r) * y )
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -198,14 +201,14 @@ class AcceleDoG(Optimizer):
                 for w, p in zip(group['w'], group['params']):
                     w.id_number = p.id_number
 
-                group['y_bar'] = [p.clone().detach_().zero_() for p in group['params']]
-                for y, p in zip(group['y_bar'], group['params']):
-                    y.id_number = p.id_number
+                # group['y_bar'] = [p.clone().detach_().zero_() for p in group['params']]
+                # for y, p in zip(group['y_bar'], group['params']):
+                #     y.id_number = p.id_number
 
-                if self.save_y:
-                    group['y'] = [p.clone().detach_().zero_() for p in group['params']]
-                    for y, p in zip(group['y'], group['params']):
-                        y.id_number = p.id_number
+                # if self.save_y:
+                #     group['y'] = [p.clone().detach_().zero_() for p in group['params']]
+                #     for y, p in zip(group['y'], group['params']):
+                #         y.id_number = p.id_number
             else:
                 init = group['init_buffer']
 
@@ -228,9 +231,12 @@ class AcceleDoG(Optimizer):
         for group in self.param_groups:
             init = group['init_buffer']
 
-            alpha = group['alpha']
+            weight_decay = group['weight_decay']
+            decouple_decay = group['decouple_decay']
+            decay_to_init = group['decay_to_init']
+            momentum = group['momentum']
 
-            for x, w, eta_y, eta_w, pi in zip(group['params'], group['w'], group['eta_y'], group['eta_w'], init):
+            for x, w, pi, x_decay_factor, w_decay_factor in zip(group['params'], group['w'], init, group['x_decay_factor'], group['w_decay_factor']):
                 if x.grad is None:
                     continue
                 else:
@@ -240,35 +246,48 @@ class AcceleDoG(Optimizer):
                                 x.add_(x - pi, alpha=-weight_decay)
                                 w.add_(w - pi, alpha=-weight_decay)
                         else:
-                            x.add_(x, alpha=-weight_decay * group['x_decay_factor'])
-                            w.add_(w, alpha=-weight_decay * group['w_decay_factor'])
+                            x.add_(x * x_decay_factor, alpha=-weight_decay )
+                            w.add_(w * w_decay_factor, alpha=-weight_decay )
 
-                    x.add_(x.grad.detach(), alpha=-eta_y)
-                    w.add_(x.grad.detach(), alpha=-eta_w * alpha)
+            for x, w, eta_y, eta_w, alpha in zip(group['params'], group['w'], group['eta_y'], group['eta_w'], group['alpha']):
+                if x.grad is None:
+                    continue
+                else:
+                    w.mul_(momentum)
+                    w.add_(x, alpha=1-momentum)
+                    w.add_(x.grad.detach() * eta_w * alpha, alpha=-1 )
 
-            self.average_step( group )
+                    x.add_(x.grad.detach() * eta_y, alpha=-1)
 
-            curr_d_y = torch.stack([torch.norm(y.detach() - pi) for y, pi in zip(group['params'], init)]).norm()
+            # self.average_step( group )
+
             self._update_group_dist(group, 'y', group['params'])
             self._update_group_dist(group, 'w', group['w'])
 
             #recalculate tau
             self._update_group_total_dist(group, init)
-            alpha = group['alpha']
 
-            if self.opt_ver == 2:
-                tau = group['alpha'] * group['rbar'] / group['sum_alpha_r']
-            if self.opt_ver == 3:
-                tau = group['alpha'] / group['sum_alpha']
-            else:
-                tau = 1 / alpha
+            taus = [0.0] * len(group['params'])
+            for i in range(len(group['params'])):
+                if self.opt_ver == 2:
+                    taus[i] = group['alpha'][i] * group['rbar'][i] / group['sum_alpha_r'][i]
+                if self.opt_ver == 3:
+                    taus[i] = group['alpha'][i] / group['sum_alpha'][i]
+                else:
+                    taus[i] = 1 / group['alpha'][i]
+                if self.granularity == 'all':
+                    break
+            
+            if self.granularity == 'all':
+                for i in range(len(group['params'])):
+                    taus[i] = taus[0]
 
-            for x, w, eta_y, eta_w in zip(group['params'], group['w'], group['eta_y'], group['eta_w']):
+            for x, w, eta_y, eta_w, tau in zip(group['params'], group['w'], group['eta_y'], group['eta_w'], taus):
                 if x.grad is None:
                     continue
                 else:
-                    x.mul_(1 - tau)
-                    x.add_(w, alpha=tau)
+                    x.mul_( -tau + 1)
+                    x.add_(w * tau)
 
             self._update_group_dist(group, 'x', group['params'])
 
@@ -277,65 +296,146 @@ class AcceleDoG(Optimizer):
         return loss
 
     def _update_group_dist(self, group, name, param):
-        curr_d = torch.stack([torch.norm(p.detach() - pi) for p, pi in zip(param, group['init_buffer'])]).norm()
-        group['rbar_' + name] = torch.maximum(group['rbar_' + name], curr_d)
-        group['r_' + name] = curr_d
+        for i in range(len(group['params'])):
+            if self.granularity == 'all':
+                curr_d = torch.stack([(p.detach() - pi).norm() for p, pi in zip(param, group['init_buffer'])]).norm()
+            elif self.granularity == 'param':
+                p, pi = param[i], group['init_buffer'][i]
+                curr_d = (p.detach() - pi).norm(dim=group['dim'][i], keepdim=True)
+            group['rbar_' + name][i] = torch.maximum(group['rbar_' + name][i], curr_d)
+            group['r_' + name][i] = curr_d
+            if self.granularity == 'all':
+                break
+
+        if self.granularity == 'all': 
+            for i in range(1, len(group['params'])):
+                group['rbar_' + name][i] = group['rbar_' + name][0]
+                group['r_' + name][i] = curr_d
 
     def _update_group_total_dist(self, group, init):
-        prev_rbar = group['rbar']
-        group['rbar'] = torch.maximum(group['rbar'], group['rbar_w'])
-        group['rbar_sum'] += group['rbar']
+        for i in range(len(group['params'])):
+            prev_rbar = group['rbar'][i]
+            group['rbar'][i] = torch.maximum(group['rbar'][i], group['rbar_w'][i])
+            group['rbar_sum'][i] += group['rbar'][i]
 
-        if self.alpha_ver in [2]:
-            group['alpha'] += 1
-        elif self.alpha_ver in [3]:
-            group['alpha'] = (1 / group['momentum']) ** torch.maximum(torch.ones(1)[0], group['alpha_const'] * group['rbar_sum']/group['rbar'] )
-        elif self.alpha_ver in [4]:
-            group['alpha'] *= prev_rbar / (group['rbar'] * group['momentum'])
-        elif self.alpha_ver in [5]:
-            group['alpha'] /= group['momentum']
-        elif self.alpha_ver in [6]:
-            group['alpha'] = ((1-group['momentum']) / group['momentum']) * group['sum_alpha_r'] / group['rbar']
-        elif self.alpha_ver in [7]:
-            pass
-        else:
-            group['alpha'] = torch.maximum(torch.ones(1)[0], group['alpha_const'] * group['rbar_sum']/group['rbar'] ) 
-        group['sum_alpha_r'] += group['alpha'] * group['rbar']
-        group['sum_alpha'] += group['alpha']
+            if self.alpha_ver in [2]:
+                group['alpha'][i] += 1
+            elif self.alpha_ver in [3]:
+                group['alpha'][i] = (1 / group['momentum']) ** torch.maximum(torch.ones(1)[0], group['alpha_const'] * group['rbar_sum'][i]/group['rbar'][i] )
+            elif self.alpha_ver in [4]:
+                group['alpha'][i] *= prev_rbar / (group['rbar'][i] * group['momentum'])
+            elif self.alpha_ver in [5]:
+                group['alpha'][i] /= group['momentum']
+            elif self.alpha_ver in [6]:
+                group['alpha'][i] = ((1-group['momentum']) / group['momentum']) * group['sum_alpha_r'][i] / group['rbar'][i]
+            elif self.alpha_ver in [7]:
+                pass
+            else:
+                group['alpha'][i] = torch.maximum(torch.ones(1)[0], group['alpha_const'] * group['rbar_sum'][i]/group['rbar'][i] ) 
+            group['sum_alpha_r'][i] += group['alpha'][i] * group['rbar'][i]
+            group['sum_alpha'][i] += group['alpha'][i]
+            if self.granularity == 'all':
+                break
+
+        if self.granularity == 'all':
+            for i in range(1, len(group['params'])):
+                group['rbar'][i] = group['rbar'][0]
+                group['rbar_sum'][i] = group['rbar_sum'][0]
+                group['alpha'][i] = group['alpha'][0]
+                group['sum_alpha_r'][i] = group['sum_alpha_r'][0]
+                group['sum_alpha'][i] = group['sum_alpha'][0]
 
     def _update_group_norm(self, group, init):
         if self._first_step:
-            group['r_x'] = group['r_y'] = group['r_w'] = torch.zeros(1)[0]
+            group['r_x'] = group['r_y'] = group['r_w'] = [torch.zeros(1)[0]] * len(group['params'])
+            group['x_decay_factor'] = [0.0] * len(group['params'])
+            group['w_decay_factor'] = [0.0] * len(group['params'])
+            group['x_norm'] = [0.0] * len(group['params'])
+            group['w_norm'] = [0.0] * len(group['params'])
+            group['dim'] = [None] * len(group['params'])
         
-        group['x_norm'] = torch.stack([torch.norm(p.detach()) for p in group['params']]).norm()
-        group['w_norm'] = torch.stack([torch.norm(p.detach()) for p in group['w']]).norm()
+        for i in range(len(group['params'])):
+            if self.granularity == 'all':
+                group['x_norm'][i] = torch.stack([torch.norm(p.detach()) for p in group['params']]).norm()
+                group['w_norm'][i] = torch.stack([torch.norm(p.detach()) for p in group['w']]).norm()
+            elif self.granularity == 'param':
+                p = group['params'][i]
+                norm_dim = [j for j in range(p.dim())]
+                if hasattr(p, 'per_inout'):
+                    if p.per_inout == 'first' or p.per_inout == 'output':
+                        norm_dim.remove(0)
+                    elif p.per_inout == 'last' or p.per_inout == 'input':
+                        norm_dim.remove(p.dim()-1)
+                group['dim'][i] = tuple(norm_dim)
 
-        if not (group['decay_factor'] is None):
-            group['x_decay_factor'] = min( group['decay_factor'] * group['r_x'] / group['x_norm'], 1.0)
-            group['w_decay_factor'] = min( group['decay_factor'] * group['r_w']  / group['w_norm'], 1.0)
+                group['x_norm'][i] = group['params'][i].norm(dim=group['dim'][i], keepdim=True)
+                group['w_norm'][i] = group['w'][i].norm(dim=group['dim'][i], keepdim=True)
+
+            if not (group['decay_factor'] is None):
+                group['x_decay_factor'][i] = torch.minimum( group['decay_factor'] * group['r_x'][i] / group['x_norm'][i], torch.ones_like(group['x_norm'][i]))
+                group['w_decay_factor'][i] = torch.minimum( group['decay_factor'] * group['r_w'][i]  / group['w_norm'][i], torch.ones_like(group['w_norm'][i]))
+            if self.granularity == 'all':
+                break
+        
+        if self.granularity == 'all':
+            for i in range(1, len(group['params'])):
+                group['x_norm'][i] = group['x_norm'][0]
+                group['w_norm'][i] = group['w_norm'][0]
+                group['x_decay_factor'][i] = group['x_decay_factor'][0]
+                group['w_decay_factor'][i] = group['w_decay_factor'][0]
 
     def _update_group_state(self, group, init):
         # treat all layers as one long vector
         if self._first_step:
-            group['rbar'] = group['reps_rel'] * (1 + torch.stack([p.norm() for p in group['params']]).norm())
-            group['rbar_sum'] = group['rbar'].clone()
+            if self.granularity == 'all':
+                group['rbar'] = [group['reps_rel'] * (1 + torch.stack([p.norm() for p in group['params']]).norm())] * len(group['params'])
+            elif self.granularity == 'param':
+                group['rbar'] = [group['reps_rel'] * (1 + p.norm(dim=group['dim'][i], keepdim=True)) for i,p in enumerate(group['params'])]
+            
+            group['rbar_sum'] = [0.] * len(group['params'])
+            group['alpha'] = [0.] * len(group['params'])
+            group['sum_alpha_r'] = [0.] * len(group['params'])
+            group['sum_alpha'] = [0.] * len(group['params'])
+            group['G_y'] = [0.] * len(group['params'])
+            group['G_w'] = [0.] * len(group['params'])
+            group['rbar_y'] = [0.] * len(group['params'])
+            group['rbar_w'] = [0.] * len(group['params'])
+            group['rbar_x'] = [0.] * len(group['params'])
 
-            if self.alpha_ver in [2,3,4,5,6]:
-                group['alpha'] = group['rbar'] / group['rbar'] # =1
-            elif self.alpha_ver in [7]:
-                group['alpha'] = group['rbar'] / group['rbar'] # =1
-                group['alpha'] = group['alpha'] / (1 - group['momentum'])
-            else:
-                group['alpha'] = torch.maximum(torch.ones(1)[0],  group['alpha_const'] * group['rbar_sum']/group['rbar'] )
-            group['sum_alpha_r'] = group['alpha'] * group['rbar']
-            group['sum_alpha'] = group['alpha'].clone()
+            for i in range(len(group['params'])):
+                group['rbar_sum'][i] = group['rbar'][i].clone()
 
-            group['G_y'] = group['alpha'] * 0 + group['eps']
-            group['G_w'] = group['G_y'].clone()
+                if self.alpha_ver in [2,3,4,5,6]:
+                    group['alpha'][i] = group['rbar'][i] / group['rbar'][i] # =1
+                elif self.alpha_ver in [7]:
+                    group['alpha'][i] = group['rbar'][i] / group['rbar'][i] # =1
+                    group['alpha'][i] = group['alpha'][i] / (1 - group['momentum'])
+                else:
+                    group['alpha'][i] = torch.maximum(torch.ones(1)[0],  group['alpha_const'] * group['rbar_sum'][i]/group['rbar'][i] )
+                group['sum_alpha_r'][i] = group['alpha'][i] * group['rbar'][i]
+                group['sum_alpha'][i] = group['alpha'][i].clone()
 
-            group['rbar_y'] = group['rbar']
-            group['rbar_w'] = group['rbar']
-            group['rbar_x'] = group['rbar']
+                group['G_y'][i] = group['alpha'][i] * 0 + group['eps']
+                group['G_w'][i] = group['G_y'][i].clone()
+
+                group['rbar_y'][i] = group['rbar'][i]
+                group['rbar_w'][i] = group['rbar'][i]
+                group['rbar_x'][i] = group['rbar'][i]
+                
+                if self.granularity == 'all':
+                    break
+
+            if self.granularity == 'all':
+                for i in range(1, len(group['params'])):
+                    group['rbar_sum'][i] = group['rbar_sum'][i]
+                    group['alpha'][i] = group['alpha'][i]
+                    group['sum_alpha_r'][i] = group['sum_alpha_r'][i]
+                    group['sum_alpha'][i] = group['sum_alpha'][i]
+                    group['G_y'][i] = group['G_y'][i]
+                    group['G_w'][i] = group['G_w'][i]
+                    group['rbar_y'][i] = group['rbar_y'][i]
+                    group['rbar_w'][i] = group['rbar_w'][i]
+                    group['rbar_x'][i] = group['rbar_x'][i]
         else:
             #assert (self.opt_ver in [1])
             #curr_d = torch.stack([torch.norm(p.detach() - pi) for p, pi in zip(group['params'], init)]).norm()
@@ -345,44 +445,47 @@ class AcceleDoG(Optimizer):
             #group['rbar'] = torch.maximum(group['rbar'], group['rbar_x'])
             pass
 
-        if self.step_size_ver in [3]:
-            group['G_y'] += torch.stack([( group['sum_alpha'] * (p.grad.detach() ** 2) ).sum() for p in group['params']]).sum()
-        else:
-            group['G_y'] += torch.stack([( (group['alpha'] * p.grad.detach()) ** 2 ).sum() for p in group['params']]).sum()
+        if self.granularity == 'all':
+            if self.step_size_ver in [3]:
+                group['G_y'][0] += torch.stack([( group['sum_alpha'][0] * (p.grad.detach() ** 2) ).sum() for p in group['params']]).sum()
+            else:
+                group['G_y'][0] += torch.stack([( (group['alpha'][0] * p.grad.detach()) ** 2 ).sum() for p in group['params']]).sum()
 
-        if self.step_size_ver in [2,3]:
-            group['G_w'] += torch.stack([( group['sum_alpha'] * (p.grad.detach() ** 2) ).sum() for p in group['params']]).sum()
-        else:
-            group['G_w'] += torch.stack([( (group['alpha'] * p.grad.detach()) ** 2 ).sum() for p in group['params']]).sum()
+            if self.step_size_ver in [2,3]:
+                group['G_w'][0] += torch.stack([( group['sum_alpha'][0] * (p.grad.detach() ** 2) ).sum() for p in group['params']]).sum()
+            else:
+                group['G_w'][0] += torch.stack([( (group['alpha'][0] * p.grad.detach()) ** 2 ).sum() for p in group['params']]).sum()
 
-        assert group['G_y'] > 0 and group['G_w'] > 0, \
-            f'DoG cannot work when G is not strictly positive. got: {group["G_y"]}, and: {group["G_w"]}, (first_step = {self._first_step})'
-        group['eta_y'] = [group['lr'] * group['rbar'] / torch.sqrt(group['G_y'])] * len(group['params'])
-        group['eta_w'] = [group['lr'] * group['rbar'] / torch.sqrt(group['G_w'])] * len(group['params'])
+            for i in range(1, len(group['params'])):
+                group['G_y'][i] = group['G_y'][0]
+                group['G_w'][i] = group['G_w'][0]
+        elif self.granularity == 'param':
+            for i in range(len(group['params'])):
+                if self.step_size_ver in [3]:
+                    group['G_y'][i] += group['sum_alpha'][i] * (( (group['params'][i].grad.detach() ** 2) ).sum(dim=group['dim'][i], keepdim=True))
+                else:
+                    group['G_y'][i] += (group['alpha'][i]**2) * (( (group['params'][i].grad.detach()) ** 2 ).sum(dim=group['dim'][i], keepdim=True))
+
+                if self.step_size_ver in [2,3]:
+                    group['G_w'][i] += group['sum_alpha'][i] * (( (group['params'][i].grad.detach() ** 2) ).sum(dim=group['dim'][i], keepdim=True))
+                else:
+                    group['G_w'][i] += (group['alpha'][i]**2) * (( (group['params'][i].grad.detach()) ** 2 ).sum(dim=group['dim'][i], keepdim=True))
+
+        for i in range(len(group['params'])): 
+            assert (group['G_y'][i] > 0).all() and (group['G_w'][i] > 0).all(), \
+                f'DoG cannot work when G is not strictly positive. got: {group["G_y"][i]}, and: {group["G_w"][i]}, (first_step = {self._first_step})'
+
+        if self.granularity == 'all':
+            group['eta_y'] = [group['lr'] * group['rbar'][0] / torch.sqrt(group['G_y'][0])] * len(group['params'])
+            group['eta_w'] = [group['lr'] * group['rbar'][0] / torch.sqrt(group['G_w'][0])] * len(group['params'])
+        elif self.granularity == 'param':
+            group['eta_y'] = [group['lr'] * group['rbar'][i] / torch.sqrt(group['G_y'][i]) for i in range(len(group['params']))]
+            group['eta_w'] = [group['lr'] * group['rbar'][i] / torch.sqrt(group['G_w'][i]) for i in range(len(group['params']))]
 
     def _override_init_eta_if_needed(self, group):
         # Override init_eta if needed
         if self._first_step and group['init_eta'] is not None:
             init_eta = group['init_eta']
             logger.info(f'Explicitly setting init_eta value to {init_eta}')
-            group['eta'] = [eta * 0 + init_eta for eta in group['eta']]
-
-
-# class LDoG(DoG):
-#     """
-#         Layer-wise DoG, as described in:
-#        `DoG is SGD's Best Friend: A Parameter-Free Dynamic Step Size Schedule` (Ivgi et al., 2023).
-#         LDoG applies the DoG formula defined in the DoG class, but for each layer separately.
-#     """
-#     def _update_group_state(self, group, init):
-#         # treat each layer in the group as a separate block
-#         if self._first_step:
-#             group['rbar'] = group['reps_rel'] * (1 + torch.stack([p.norm() for p in group['params']]))
-#             group['G'] = torch.stack([(p.grad ** 2).sum() for p in group['params']]) + group['eps']
-#         else:
-#             curr_d = torch.stack([torch.norm(p - pi) for p, pi in zip(group['params'], init)])
-#             group['rbar'] = torch.maximum(group['rbar'], curr_d)
-#             group['G'] += torch.stack([(p.grad ** 2).sum() for p in group['params']])
-#         assert torch.all(group['G'] > 0).item(), \
-#             f'DoG cannot work when g2 is not strictly positive. got: {group["G"]}'
-#         group['eta'] = list(group['lr'] * group['rbar'] / torch.sqrt(group['G']))
+            group['eta_y'] = [eta * 0 + init_eta for eta in group['eta_y']]
+            group['eta_w'] = [eta * 0 + init_eta for eta in group['eta_w']]

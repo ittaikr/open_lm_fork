@@ -194,6 +194,9 @@ def enough_samples(num_samples_per_source: List[List[int]], needed_samples_per_s
             return False
     return True
 
+def additional_samples_for_source(source, num_samples_per_source: List[List[int]], needed_samples_per_source: List[int]):
+    return max(needed_samples_per_source[source] - sum(num_samples_per_source[source]), 0)
+
 
 def source_exhausted(paths, shard_list_per_source):
     for i, source in enumerate(paths):
@@ -435,6 +438,8 @@ def _single_epoch_string(
                     num_samples_shard = manifests[i][next_shard_per_source[i]]["num_sequences"]
                 except KeyError:
                     num_samples_shard = manifests[i][next_shard_per_source[i]]["num_chunks"]
+
+                num_samples_shard = min(num_samples_shard, additional_samples_for_source(i, num_samples_per_source, needed_samples_per_source))
 
                 shard_list_per_source[i].append(shard_name)
                 num_samples_per_source[i].append(num_samples_shard)

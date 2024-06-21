@@ -63,8 +63,22 @@ from .file_utils import (
 
 from .utils.average_utils import ModelAverager
 
-from optimizers import DoG
+from dog import DoG
 from accele_dog import AcceleDoG
+from ladamw import LAdamW
+
+from dadaptation import DAdaptAdam
+from prodigyopt import Prodigy
+
+class LoggedDAdaptAdam(DAdaptAdam):
+    def get_stats(self):
+        for group in self.param_groups:
+            return {'d': group['d']}
+
+class LoggedProdigy(Prodigy):
+    def get_stats(self):
+        for group in self.param_groups:
+            return {'d': group['d'], 'd_max': group['d_max']}
 
 #import schedulefree
 
@@ -588,9 +602,45 @@ def main(args):
     if args.train_data or (args.dataset_manifest is not None):
         named_parameters = list(model.named_parameters())
 
+        if hasattr(args, "granularity_per_token") and args.granularity_per_token:
+            outputs = []
+            inputs = []
+            if hasattr(args, "granularity_attentions") and args.granularity_attentions:
+                outputs = outputs + ["attention.in_proj.weight"]
+                inputs = inputs + ["attention.out_proj.weight"]
+
+            if hasattr(args, "granularity_feed_forward") and args.granularity_feed_forward:
+                outputs = outputs + ["feed_forward.w12.weight"]
+                inputs = inputs + ["feed_forward.w3.weight"]
+
+            if hasattr(args, "granularity_reverse") and args.granularity_reverse:
+                tmp = outputs
+                outputs = inputs
+                inputs = tmp
+
+            if (not hasattr(args, "granularity_output")) or args.granularity_output:
+                outputs = outputs + ["tok_embeddings.weight", "output.weight"] # embeddings weight is transposed, thus output instead input.
+            else:
+                outputs = outputs + ["tok_embeddings.weight"] # embeddings weight is transposed, thus output instead input.
+                
+            outputs = tuple(outputs)
+            inputs = tuple(inputs)
+
         for idx, (name, p) in enumerate(named_parameters):
             p.id_number = idx
             p.to_normalize = False
+
+            if args.granularity_per_token:
+                if name.endswith(inputs):
+                    p.per_inout = 'input'
+                elif name.endswith(outputs):
+                    p.per_inout = 'output'
+
+
+        logging.info("")
+        for n, p in named_parameters:
+            logging.info(n)
+        logging.info("")
 
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
@@ -610,15 +660,30 @@ def main(args):
             )
         else:
             if args.optim_alg is None or args.optim_alg in ['adamw']:
-                optimizer = optim.AdamW(
-                    [
-                        {"params": no_decay_params, "weight_decay": 0.0},
-                        {"params": params, "weight_decay": args.wd},
-                    ],
-                    lr=args.lr,
-                    betas=(args.beta1, args.beta2),
-                    eps=args.eps,
-                )
+                if args.dog_granularity != 'param':
+                    optimizer = optim.AdamW(
+                        [
+                            {"params": no_decay_params, "weight_decay": 0.0},
+                            {"params": params, "weight_decay": args.wd},
+                        ],
+                        lr=args.lr,
+                        betas=(args.beta1, args.beta2),
+                        eps=args.eps,
+                    )
+                else:
+                    g_op = None
+                    if hasattr(args, "ladamw_g_op"):
+                        g_op = args.ladamw_g_op
+                    optimizer = LAdamW(
+                        [
+                            {"params": no_decay_params, "weight_decay": 0.0},
+                            {"params": params, "weight_decay": args.wd},
+                        ],
+                        lr=args.lr,
+                        betas=(args.beta1, args.beta2),
+                        eps=args.eps,
+                        g_op=g_op,
+                    )
             elif args.optim_alg in ['dog']:
                 optimizer = DoG(params, lr=args.lr,
                         #init_dist_abs=args.dog_init_dist_abs,
@@ -648,10 +713,25 @@ def main(args):
                         #opt_ver=args.opt_ver,
                         #alpha_ver=args.alpha_ver,
                         #step_size_ver=args.step_size_ver,
-                        #momentum=momentum,
+                        momentum=args.momentum,
                         decouple_decay=args.decouple_decay,
                         decay_factor=args.decay_factor,
                         eps=args.eps,)
+            elif args.optim_alg in ['dadaptadam']:
+                optimizer = LoggedDAdaptAdam(params, lr=args.lr,
+                        betas=(args.beta1, args.beta2),
+                        weight_decay=args.wd,
+                        d0=args.dog_init_dist_rel,
+                        decouple=args.decouple_decay,
+                        eps=args.eps)
+            elif args.optim_alg in ['prodigy']:
+                optimizer = LoggedProdigy(params, lr=args.lr,
+                        betas=(args.beta1, args.beta2),
+                        weight_decay=args.wd,
+                        d0=args.dog_init_dist_rel,
+                        decouple=args.decouple_decay,
+                        eps=args.eps,
+                        safeguard_warmup=args.safeguard_warmup)
             else:
                 assert False, "optimizer %s not supported" % args.optim_alg
 
@@ -803,7 +883,7 @@ def main(args):
             args.val_sz = data["val"].dataloader.num_samples
         wandb.init(
             project=args.wandb_project_name,
-            name=args.name,
+            name=args.name[4:],
             notes=args.wandb_notes,
             tags=[],
             resume=None,
@@ -811,7 +891,7 @@ def main(args):
         )
         if args.debug:
             wandb.watch(model, log="all")
-        wandb.save(params_file)
+        wandb.save(params_file, Path('./wandb').resolve().parent)
         logging.debug("Finished loading wandb.")
 
     if "train" not in data:
@@ -821,11 +901,11 @@ def main(args):
             logging.info(f'=> evaluation avg {k}')
             model = averagers.avgs_dict[k].av_model
             
-        metrics = evaluate(model, data, start_epoch, args, writer)
+        metrics["average"] = k if averagers is not None else 'last'
+        metrics = evaluate(model, data, start_epoch, args, writer, metrics["average"])
         metrics["checkpoint_path"] = args.resume
         metrics["val_data"] = args.val_data
         metrics["model"] = args.model
-        metrics["average"] = k if averagers is not None else 'none'
 
         if is_master(args):
             with open(os.path.join(checkpoint_root, "results.jsonl"), "a+") as f:
@@ -927,22 +1007,22 @@ def main(args):
         if "val" in data:
             metric_key = 'last'
 
-            metrics[metric_key] = evaluate(model, data, completed_epoch, args, writer)
+            metrics[metric_key] = evaluate(model, data, completed_epoch, args, writer, metric_key)
             metrics[metric_key]["val_data"] = args.val_data
             metrics[metric_key]["model"] = args.model
-            metrics[metric_key]["average"] = 'none'
+            metrics[metric_key]["average"] = 'last'
             metrics[metric_key]["epoch"] = completed_epoch
             evaluation_loss = metrics[metric_key]["loss"]
 
             # write the metrics to a file called summary_eval.csv
             if args.save_logs and args.csv_log and is_master(args):
                 with open(csv_path_eval, "a") as f:
-                    if epoch == 0:
+                    if epoch == 1:
                         f.write(",".join(metrics[metric_key].keys()) + "\n")
                     f.write(",".join([str(v) for v in metrics[metric_key].values()]) + "\n")
             if averagers is not None:
                 for k in averagers.avgs_dict.keys():
-                    metrics[k] = evaluate(averagers.avgs_dict[k].av_model, data, completed_epoch, args, writer)
+                    metrics[k] = evaluate(averagers.avgs_dict[k].av_model, data, completed_epoch, args, writer, k)
                     metrics[k]["val_data"] = args.val_data
                     metrics[k]["model"] = args.model
                     metrics[k]["average"] = k
@@ -967,7 +1047,7 @@ def main(args):
 
         csv_path_stats = os.path.join(args.logs, args.name, "stats_eval.csv")
         with open(csv_path_stats, "a") as f:
-            if epoch == 0:
+            if epoch == 1:
                 f.write("," + ",".join(joint_metrics.keys()) + "\n")
             f.write(str(epoch) + "," +  ",".join([str(joint_metrics[k]) for k in joint_metrics.keys()]) + "\n")
 

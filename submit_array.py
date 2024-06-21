@@ -218,7 +218,8 @@ if __name__ == '__main__':
             spec_filename = os.path.join(out_dir, 'spec.yaml')
             if spec_filename in running:
                 continue
-            print(out_dir)
+            if spec_filename.startswith("./") and spec_filename[2:] in running:
+                continue
             yield spec_name, spec_filename, out_dir
 
 
