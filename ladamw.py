@@ -66,7 +66,6 @@ class LAdamW(Optimizer):
             if first_step:
                 init = group['init_buffer'] = [p.clone().detach_() for p in group['params']]
                 group['m'] = [p.clone().detach_().zero_() for p in group['params']]
-                group['v'] = [p.clone().detach_().zero_() for p in group['params']]
 
                 # group['y_bar'] = [p.clone().detach_().zero_() for p in group['params']]
                 # for y, p in zip(group['y_bar'], group['params']):
@@ -116,7 +115,7 @@ class LAdamW(Optimizer):
                 group['dim'] = [None for i in range(len(group['params']))]
                 group['numel'] = [None for i in range(len(group['params']))]
 
-            for i, (x, m, v) in enumerate(zip(group['params'], group['m'], group['v'])):
+            for i, x in enumerate(group['params']):
                 if x.grad is None:
                     continue
                 else:
@@ -130,21 +129,39 @@ class LAdamW(Optimizer):
                             elif x.per_inout == 'last' or x.per_inout == 'input':
                                 norm_dim.remove(x.dim()-1)
                                 numel /= x.shape[x.dim()-1]
-                        group['dim'][i] = norm_dim
+                            elif p.per_inout == 'all':
+                                norm_dim = []
+                                numel = 1
+                        group['dim'][i] = tuple(norm_dim)
                         group['numel'][i] = numel
+            
+            if self._first_step:
+                if g_op == 'max':
+                    group['v'] = [self._amax(p.clone().detach_(), dim=group['dim'][i]).zero_() for i,p in enumerate(group['params'])]
+                else:
+                    group['v'] = [p.clone().detach_().zero_() for p in group['params']]
 
+            for i, (x, m, v) in enumerate(zip(group['params'], group['m'], group['v'])):
+                if x.grad is None:
+                    continue
+                else:
                     m.mul_(beta1)
                     m.add_(x.grad, alpha=1-beta1)
 
                     v.mul_(beta2)
                     if g_op == 'max':
-                        v.add_((x.grad**2).max(dim=group['dim'][i], keepdim=True), alpha=1-beta2)
+                        v.add_(self._amax(x.grad**2, dim=group['dim'][i]), alpha=1-beta2)
+                        v_hat_dim = tuple()
                     else:
                         v.add_(x.grad**2, alpha=1-beta2)
+                        v_hat_dim = group['dim'][i]
 
-                    v_hat = v.sum(dim=group['dim'][i], keepdim=True) / (1-beta2 ** self.t)
+                    v_hat = self._sum(v,dim=v_hat_dim) / (1-beta2 ** self.t)
                     if g_op == 'avg':
                         v_hat /= group['numel'][i]
+
+                    if self._first_step:
+                         logging.info( "shapes: " + str((v.shape, v_hat.shape)) )
 
                     x.add_( m / (v_hat + eps).sqrt() , alpha= -lr / (1-beta1 ** self.t)  )
 
@@ -162,7 +179,7 @@ class LAdamW(Optimizer):
 
         for i in range(len(group['params'])):
             p, pi = param[i], group['init_buffer'][i]
-            curr_d = (p - pi).norm(dim=group['dim'][i], keepdim=True)
+            curr_d = self._norm(p - pi, dim=group['dim'][i])
             group['rbar_' + name][i] = torch.maximum(group['rbar_' + name][i], curr_d)
             group['r_' + name][i] = curr_d
 
@@ -174,3 +191,17 @@ class LAdamW(Optimizer):
             prev_rbar = group['rbar'][i]
             group['rbar'][i] = torch.maximum(group['rbar'][i], group['rbar_x'][i])
 
+    def _sum(self, p, dim):
+        if dim == tuple():
+            return p
+        return p.sum(dim=dim, keepdim=True)
+
+    def _norm(self, p, dim):
+        if dim == tuple():
+            return p
+        return p.norm(dim=dim, keepdim=True)
+
+    def _amax(self, p, dim):
+        if dim == tuple():
+            return p
+        return p.amax(dim=dim, keepdim=True)

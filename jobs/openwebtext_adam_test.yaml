@@ -1,5 +1,5 @@
 job_details:
-  name: openwebtext_ladam_per_param_adam_fixed2
+  name: openwebtext_adam_test
   output_dir: results
   num_gpus: 1
   num_nodes: 1
@@ -61,22 +61,12 @@ parameters:
     decoupled_wd: [0.0001]
     lr: [3.16e-01, 3.16e-02, 3.16e-03, 3.16e-04, 3.16e-05, 1.0e-01, 1.0e-02, 1.0e-03]
     epochs: [50]
-    wandb_project_name: ['openwebtext_ladam_per_param_adam_fixed2']
+    wandb_project_name: ['openwebtext_adam_test']
     delete_previous_checkpoint: [true]
     workers: [4]
     dataset_manifest: ["data/openwebtext2_tokenized/manifest_train.jsonl"]
     val_data: ["data/openwebtext2_tokenized/00000026.tar"]
     averagers: ['poly_8_1']
     optim_alg: ['adamw']
-    dog_granularity: ['param']
-    granularity_defualt: ['all']
-    granularity_per_token: [true] # [false] # 
-    granularity_per_param: [true] # [false] # 
-    LIST_OF_GRANULARITIES:
-      - granularity_attentions: [true]
-        granularity_feed_forward: [true]
-      - granularity_attentions: [false]
-        granularity_feed_forward: [false]
-    ladamw_g_op: ['max', 'avg']
     # if there are 600B tokens in RW, and all of them are uniformly distributed in the shards, then each shard has 600B/42512 = 14.1M tokens
     # so, keeping 1000 shards for validation, we have 1000*14.1M = 14.1B tokens for validation

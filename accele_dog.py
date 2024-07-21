@@ -22,7 +22,8 @@ class AcceleDoG(Optimizer):
 
     def __init__(self, params, reps_rel: float = 1e-6, lr: float = 1.0, alpha_const: float = 0.5,
                  weight_decay: float = 0.0, decay_to_init: bool = False, eps: float = 1e-8, init_eta: Optional[float] = None,
-                 granularity='all', opt_ver: int = 1, alpha_ver: int = 1, step_size_ver: int = 1, momentum: float = None, decouple_decay: bool = False, decay_factor: float = None):
+                 granularity='all', opt_ver: int = 1, alpha_ver: int = 1, step_size_ver: int = 1, momentum: float = None, decouple_decay: bool = False, decay_factor: float = None,
+                 max_rbar: bool = False, normalize_rbar: bool = False):
         r"""Distance over Gradients - an adaptive stochastic optimizer.
         DoG updates parameters x_t with stochastic gradients g_t according to:
         .. math::
@@ -87,7 +88,7 @@ class AcceleDoG(Optimizer):
             alpha_const = 1.
 
         defaults = dict(reps_rel=reps_rel, lr=lr, alpha_const=alpha_const, weight_decay=weight_decay, decay_to_init=decay_to_init, eps=eps, init_eta=init_eta,
-                            momentum=momentum, decouple_decay=decouple_decay, decay_factor=decay_factor, x_decay_factor=[1.0]*len(params), w_decay_factor=[1.0]*len(params))
+                            momentum=momentum, decouple_decay=decouple_decay, decay_factor=decay_factor, x_decay_factor=[1.0]*len(params), w_decay_factor=[1.0]*len(params), max_rbar=max_rbar, normalize_rbar=normalize_rbar)
         super(AcceleDoG, self).__init__(params, defaults)
 
     def __setstate__(self, state):
@@ -196,6 +197,12 @@ class AcceleDoG(Optimizer):
             decay_to_init = group['decay_to_init']
 
             if first_step:
+                self._update_dim(group)
+
+                for i, p in enumerate(group['params']):
+                    if hasattr(p, 'to_normalize') and p.to_normalize:
+                        p /= torch.norm_except_dim(p, 2, group['normalize_dim'][i])
+
                 init = group['init_buffer'] = [p.clone().detach_() for p in group['params']]
                 group['w'] = [p.clone().detach_() for p in group['params']]
                 for w, p in zip(group['w'], group['params']):
@@ -249,7 +256,7 @@ class AcceleDoG(Optimizer):
                             x.add_(x * x_decay_factor, alpha=-weight_decay )
                             w.add_(w * w_decay_factor, alpha=-weight_decay )
 
-            for x, w, eta_y, eta_w, alpha in zip(group['params'], group['w'], group['eta_y'], group['eta_w'], group['alpha']):
+            for i, (x, w, eta_y, eta_w, alpha) in enumerate(zip(group['params'], group['w'], group['eta_y'], group['eta_w'], group['alpha'])):
                 if x.grad is None:
                     continue
                 else:
@@ -258,6 +265,9 @@ class AcceleDoG(Optimizer):
                     w.add_(x.grad.detach() * eta_w * alpha, alpha=-1 )
 
                     x.add_(x.grad.detach() * eta_y, alpha=-1)
+
+                    if hasattr(x, 'to_normalize') and x.to_normalize:
+                        w /= torch.norm_except_dim(w, 2, group['normalize_dim'][i])
 
             # self.average_step( group )
 
@@ -282,12 +292,15 @@ class AcceleDoG(Optimizer):
                 for i in range(len(group['params'])):
                     taus[i] = taus[0]
 
-            for x, w, eta_y, eta_w, tau in zip(group['params'], group['w'], group['eta_y'], group['eta_w'], taus):
+            for i, (x, w, eta_y, eta_w, tau) in enumerate(zip(group['params'], group['w'], group['eta_y'], group['eta_w'], taus)):
                 if x.grad is None:
                     continue
                 else:
                     x.mul_( -tau + 1)
                     x.add_(w * tau)
+
+                    if hasattr(x, 'to_normalize') and x.to_normalize:
+                        x /= torch.norm_except_dim(x, 2, group['normalize_dim'][i])
 
             self._update_group_dist(group, 'x', group['params'])
 
@@ -301,7 +314,11 @@ class AcceleDoG(Optimizer):
                 curr_d = torch.stack([(p.detach() - pi).norm() for p, pi in zip(param, group['init_buffer'])]).norm()
             elif self.granularity == 'param':
                 p, pi = param[i], group['init_buffer'][i]
-                curr_d = (p.detach() - pi).norm(dim=group['dim'][i], keepdim=True)
+                curr_d = self._norm(p.detach() - pi, dim=group['dim'][i])
+                if group['max_rbar']:
+                    curr_d = curr_d.max()
+                elif group['normalize_rbar']:
+                    curr_d = torch.norm(curr_d) / (curr_d.numel() ** 0.5)
             group['rbar_' + name][i] = torch.maximum(group['rbar_' + name][i], curr_d)
             group['r_' + name][i] = curr_d
             if self.granularity == 'all':
@@ -345,6 +362,32 @@ class AcceleDoG(Optimizer):
                 group['sum_alpha_r'][i] = group['sum_alpha_r'][0]
                 group['sum_alpha'][i] = group['sum_alpha'][0]
 
+    def _update_dim(self, group):
+        if not self._first_step:
+            return
+
+        group['dim'] = [None] * len(group['params'])
+        group['normalize_dim'] = [-1] * len(group['params'])
+
+        for i, p  in enumerate(group['params']):
+            if hasattr(p, 'to_normalize') and p.to_normalize:
+                if p.to_normalize in ['first', 'output']:
+                    group['normalize_dim'][i] = 0
+                elif p.to_normalize in ['last', 'input']:
+                    group['normalize_dim'][i] = p.dim()-1
+
+            if self.granularity == 'param':
+                norm_dim = [j for j in range(p.dim())]
+                if hasattr(p, 'per_inout'):
+                    if p.per_inout == 'first' or p.per_inout == 'output':
+                        norm_dim.remove(0)
+                    elif p.per_inout == 'last' or p.per_inout == 'input':
+                        norm_dim.remove(p.dim()-1)
+                    elif p.per_inout == 'all':
+                        norm_dim = []
+                group['dim'][i] = tuple(norm_dim)
+        
+
     def _update_group_norm(self, group, init):
         if self._first_step:
             group['r_x'] = group['r_y'] = group['r_w'] = [torch.zeros(1)[0]] * len(group['params'])
@@ -352,24 +395,14 @@ class AcceleDoG(Optimizer):
             group['w_decay_factor'] = [0.0] * len(group['params'])
             group['x_norm'] = [0.0] * len(group['params'])
             group['w_norm'] = [0.0] * len(group['params'])
-            group['dim'] = [None] * len(group['params'])
         
         for i in range(len(group['params'])):
             if self.granularity == 'all':
                 group['x_norm'][i] = torch.stack([torch.norm(p.detach()) for p in group['params']]).norm()
                 group['w_norm'][i] = torch.stack([torch.norm(p.detach()) for p in group['w']]).norm()
             elif self.granularity == 'param':
-                p = group['params'][i]
-                norm_dim = [j for j in range(p.dim())]
-                if hasattr(p, 'per_inout'):
-                    if p.per_inout == 'first' or p.per_inout == 'output':
-                        norm_dim.remove(0)
-                    elif p.per_inout == 'last' or p.per_inout == 'input':
-                        norm_dim.remove(p.dim()-1)
-                group['dim'][i] = tuple(norm_dim)
-
-                group['x_norm'][i] = group['params'][i].norm(dim=group['dim'][i], keepdim=True)
-                group['w_norm'][i] = group['w'][i].norm(dim=group['dim'][i], keepdim=True)
+                group['x_norm'][i] = self._norm(group['params'][i], dim=group['dim'][i])
+                group['w_norm'][i] = self._norm(group['w'][i], dim=group['dim'][i])
 
             if not (group['decay_factor'] is None):
                 group['x_decay_factor'][i] = torch.minimum( group['decay_factor'] * group['r_x'][i] / group['x_norm'][i], torch.ones_like(group['x_norm'][i]))
@@ -390,7 +423,10 @@ class AcceleDoG(Optimizer):
             if self.granularity == 'all':
                 group['rbar'] = [group['reps_rel'] * (1 + torch.stack([p.norm() for p in group['params']]).norm())] * len(group['params'])
             elif self.granularity == 'param':
-                group['rbar'] = [group['reps_rel'] * (1 + p.norm(dim=group['dim'][i], keepdim=True)) for i,p in enumerate(group['params'])]
+                if (not group['max_rbar']) and (not group['normalize_rbar']):
+                    group['rbar'] = [group['reps_rel'] * (1 + self._norm(p, dim=group['dim'][i])) for i,p in enumerate(group['params'])]
+                else:
+                    group['rbar'] = [group['reps_rel'] * (1 + self._norm(p,dim=group['dim'][i])).max() for i,p in enumerate(group['params'])]
             
             group['rbar_sum'] = [0.] * len(group['params'])
             group['alpha'] = [0.] * len(group['params'])
@@ -415,7 +451,10 @@ class AcceleDoG(Optimizer):
                 group['sum_alpha_r'][i] = group['alpha'][i] * group['rbar'][i]
                 group['sum_alpha'][i] = group['alpha'][i].clone()
 
-                group['G_y'][i] = group['alpha'][i] * 0 + group['eps']
+                if self.granularity == 'param' and (group['max_rbar'] or group['normalize_rbar']):
+                    group['G_y'][i] = self._norm(group['params'][i], dim=group['dim'][i]) * 0 + group['eps']
+                else:
+                    group['G_y'][i] = group['alpha'][i] * 0 + group['eps']
                 group['G_w'][i] = group['G_y'][i].clone()
 
                 group['rbar_y'][i] = group['rbar'][i]
@@ -462,14 +501,16 @@ class AcceleDoG(Optimizer):
         elif self.granularity == 'param':
             for i in range(len(group['params'])):
                 if self.step_size_ver in [3]:
-                    group['G_y'][i] += group['sum_alpha'][i] * (( (group['params'][i].grad.detach() ** 2) ).sum(dim=group['dim'][i], keepdim=True))
+                    group['G_y'][i] += group['sum_alpha'][i] * (self._sum( (group['params'][i].grad.detach() ** 2), dim=group['dim'][i]))
                 else:
-                    group['G_y'][i] += (group['alpha'][i]**2) * (( (group['params'][i].grad.detach()) ** 2 ).sum(dim=group['dim'][i], keepdim=True))
+                    if self._first_step:
+                        logging.info( "shapes: " + str((group['G_y'][i].shape, group['alpha'][i].shape, group['params'][i].grad.shape)) )
+                    group['G_y'][i] += (group['alpha'][i]**2) * (self._sum( (group['params'][i].grad.detach()) ** 2, dim=group['dim'][i]))
 
                 if self.step_size_ver in [2,3]:
-                    group['G_w'][i] += group['sum_alpha'][i] * (( (group['params'][i].grad.detach() ** 2) ).sum(dim=group['dim'][i], keepdim=True))
+                    group['G_w'][i] += group['sum_alpha'][i] * (self._sum( (group['params'][i].grad.detach() ** 2), dim=group['dim'][i]))
                 else:
-                    group['G_w'][i] += (group['alpha'][i]**2) * (( (group['params'][i].grad.detach()) ** 2 ).sum(dim=group['dim'][i], keepdim=True))
+                    group['G_w'][i] += (group['alpha'][i]**2) * (self._sum( (group['params'][i].grad.detach()) ** 2, dim=group['dim'][i]))
 
         for i in range(len(group['params'])): 
             assert (group['G_y'][i] > 0).all() and (group['G_w'][i] > 0).all(), \
@@ -489,3 +530,13 @@ class AcceleDoG(Optimizer):
             logger.info(f'Explicitly setting init_eta value to {init_eta}')
             group['eta_y'] = [eta * 0 + init_eta for eta in group['eta_y']]
             group['eta_w'] = [eta * 0 + init_eta for eta in group['eta_w']]
+
+    def _sum(self, p, dim):
+        if dim == tuple():
+            return p
+        return p.sum(dim=dim, keepdim=True)
+
+    def _norm(self, p, dim):
+        if dim == tuple():
+            return p
+        return p.norm(dim=dim, keepdim=True)

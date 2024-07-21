@@ -19,7 +19,9 @@ class DoG(Optimizer):
                  decay_to_init=False,
                  eps=1e-8,
                  decouple_decay: bool = False,
-                 decay_factor: float = None):
+                 decay_factor: float = None,
+                 max_rbar: bool = False,
+                 normalize_rbar: bool = False):
         if lr is not required and lr < 0.0:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if init_dist_abs is not required and init_dist_abs < 0.0:
@@ -38,7 +40,7 @@ class DoG(Optimizer):
 
         defaults = dict(lr=lr, init_dist_abs=init_dist_abs, init_dist_rel=init_dist_rel, init_dist_rel_normalized=init_dist_rel_normalized,
                         granularity=granularity, weight_decay=weight_decay, eps=eps,
-                        decay_to_init=decay_to_init, decouple_decay=decouple_decay, decay_factor=decay_factor, weight_decay_factor=[1.0] * len(params))
+                        decay_to_init=decay_to_init, decouple_decay=decouple_decay, decay_factor=decay_factor, weight_decay_factor=[1.0] * len(params), max_rbar=max_rbar, normalize_rbar=normalize_rbar)
         super().__init__(params, defaults)
 
         with torch.no_grad():
@@ -134,24 +136,34 @@ class DoG(Optimizer):
                             norm_dim.remove(0)
                         elif p.per_inout == 'last' or p.per_inout == 'input':
                             norm_dim.remove(p.dim()-1)
+                        elif p.per_inout == 'all':
+                            norm_dim = []
+                    norm_dim = tuple(norm_dim) 
 
                     if first_step:
                         group['d'][i] = group['init_dist_abs'] * torch.ones(1)[0] +\
-                                    ( group['init_dist_rel'] if not (hasattr(p, 'to_normalize') and p.to_normalize) else group['init_dist_rel_normalized'] ) * p.norm(dim=norm_dim, keepdim=True)
+                                    ( group['init_dist_rel'] if not (hasattr(p, 'to_normalize') and p.to_normalize) else group['init_dist_rel_normalized'] ) * self._norm(p, dim=norm_dim)
                         group['g2sum'][i] = group['eps'] * torch.ones_like(group['d'][i])
 
+                        logging.info( "dims: " + str(p.shape) + "," + str(group['d'][i].shape) )
                         if hasattr(p, 'per_inout'):
-                            logging.info( "dim: " + str(p.shape) )
-                            logging.info( "per_inout: " + p.per_inout + ", " + str(group['d'][i].shape) )
+                            logging.info( "per_inout: " + p.per_inout)
+
+                        if group['max_rbar'] or group['normalize_rbar']:
+                            group['d'][i] = group['d'][i].max()
                     else:
-                        curr_d = torch.norm(p - pi, dim=norm_dim, keepdim=True)
+                        curr_d = self._norm(p - pi, dim=norm_dim)
+                        if group['max_rbar']:
+                            curr_d = curr_d.max()
+                        elif group['normalize_rbar']:
+                            curr_d = torch.norm(curr_d) / (curr_d.numel() ** 0.5)
                         group['d'][i] = torch.maximum(group['d'][i], curr_d)
 
                     if not (group['decay_factor'] is None):
-                        curr_norm = p.norm(dim=norm_dim, keepdim=True)
+                        curr_norm = self._norm(p, dim=norm_dim)
                         group['weight_decay_factor'][i] = torch.minimum( group['decay_factor'] * group['d'][i] / curr_norm, torch.ones_like(curr_norm))
                     
-                    group['g2'][i] = (p.grad ** 2).sum(dim=norm_dim, keepdim=True)
+                    group['g2'][i] = self._sum(p.grad ** 2, dim=norm_dim)
                     group['g2sum'][i] = group['g2sum'][i] + group['g2'][i]
 
                     group['eta'][i] = group['lr'] * group['d'][i] / torch.sqrt(group['g2sum'][i])
@@ -207,3 +219,13 @@ class DoG(Optimizer):
 
     def reset(self):
         self._step = 0
+
+    def _sum(self, p, dim):
+        if dim == tuple():
+            return p
+        return p.sum(dim=dim, keepdim=True)
+
+    def _norm(self, p, dim):
+        if dim == tuple():
+            return p
+        return p.norm(dim=dim, keepdim=True)

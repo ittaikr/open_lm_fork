@@ -584,7 +584,7 @@ def main(args):
     # create optimizer and scaler
     optimizer = None
     scaler = None
-    if args.averagers is not None and args.averagers != 'none':
+    if args.averagers is not None and args.averagers != 'none' and not (hasattr(args, "normalized_weights") and args.normalized_weights):
         averagers = ModelAverager(model, args.averagers, device)
 
     if args.resume is not None:
@@ -600,11 +600,13 @@ def main(args):
             raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
 
     if args.train_data or (args.dataset_manifest is not None):
-        named_parameters = list(model.named_parameters())
+        outputs = []
+        inputs = []
+        normalized_outputs = []
+        normalized_inputs = []
+        normalized_all = []
 
-        if hasattr(args, "granularity_per_token") and args.granularity_per_token:
-            outputs = []
-            inputs = []
+        if True:
             if hasattr(args, "granularity_attentions") and args.granularity_attentions:
                 outputs = outputs + ["attention.in_proj.weight"]
                 inputs = inputs + ["attention.out_proj.weight"]
@@ -619,28 +621,83 @@ def main(args):
                 inputs = tmp
 
             if (not hasattr(args, "granularity_output")) or args.granularity_output:
-                outputs = outputs + ["tok_embeddings.weight", "output.weight"] # embeddings weight is transposed, thus output instead input.
-            else:
+                outputs = outputs + ["output.weight"]
+
+            if (not hasattr(args, "granularity_input")) or args.granularity_input:
                 outputs = outputs + ["tok_embeddings.weight"] # embeddings weight is transposed, thus output instead input.
                 
-            outputs = tuple(outputs)
-            inputs = tuple(inputs)
+        outputs = tuple(outputs)
+        inputs = tuple(inputs)
 
+        if hasattr(args, "normalized_weights") and args.normalized_weights:
+
+            if not hasattr(args, "dog_init_dist_rel_normalize"):
+                args.dog_init_dist_rel_normalize = args.dog_init_dist_rel
+
+            normalized_weights = args.normalized_weights.split(',')
+            named_parameters = list(model.named_parameters())
+            for idx, (name, p) in enumerate(named_parameters):
+                if (('input' in normalized_weights and name.endswith("tok_embeddings.weight")) or
+                    ('output' in normalized_weights and name.endswith("output.weight")) or
+                    ('attentions' in normalized_weights and name.endswith(("attention.in_proj.weight", "attention.out_proj.weight"))) or
+                    ('feed_forward' in normalized_weights and name.endswith(("feed_forward.w12.weight", "feed_forward.w3.weight"))) or
+                    ('all' in args.normalized_weights and name.endswith(".weight"))):
+                    
+                    dot_idx = name.rfind('.')
+                    if name.endswith(inputs):
+                        dim=0
+                        normalized_inputs.append( name[:dot_idx] + ".parametrizations.weight.original1" )
+                    elif name.endswith(outputs):
+                        dim=p.dim()-1
+                        normalized_outputs.append( name[:dot_idx] + ".parametrizations.weight.original1" )
+                    else:
+                        dim = -1
+                        normalized_all.append( name[:dot_idx] + ".parametrizations.weight.original1" )
+
+                    submodel = model.get_submodule(name[:dot_idx])
+                    torch.nn.utils.parametrizations.weight_norm(submodel, dim=dim)
+            if args.averagers is not None and args.averagers != 'none':
+                averagers = ModelAverager(model, args.averagers, device)
+        normalized_outputs = tuple(normalized_outputs)
+        normalized_inputs = tuple(normalized_inputs)
+        normalized_all = tuple(normalized_all)
+
+        named_parameters = list(model.named_parameters())
         for idx, (name, p) in enumerate(named_parameters):
             p.id_number = idx
             p.to_normalize = False
 
-            if args.granularity_per_token:
-                if name.endswith(inputs):
+            if hasattr(args, "granularity_per_token") and args.granularity_per_token:
+                if name.endswith(inputs+normalized_inputs):
                     p.per_inout = 'input'
-                elif name.endswith(outputs):
+                    if hasattr(args, "granularity_per_param") and args.granularity_per_param:
+                        p.per_inout = 'all'
+                elif name.endswith(outputs+normalized_outputs):
                     p.per_inout = 'output'
+                    if hasattr(args, "granularity_per_param") and args.granularity_per_param:
+                        p.per_inout = 'all'
+                elif hasattr(args, "granularity_defualt") and args.granularity_defualt:
+                    p.per_inout = args.granularity_defualt
+                    logging.info("Defualt for: " + name)
+
+            if hasattr(args, "normalized_weights") and args.normalized_weights:
+                if name.endswith(normalized_inputs):
+                    p.to_normalize = 'input'
+                elif name.endswith(normalized_outputs):
+                    p.to_normalize = 'output'
+                elif name.endswith(normalized_all):
+                    p.to_normalize = 'all'
 
 
         logging.info("")
         for n, p in named_parameters:
             logging.info(n)
         logging.info("")
+
+        if not hasattr(args, "max_rbar"):
+            args.max_rbar = False
+        if not hasattr(args, "normalize_rbar"):
+            args.normalize_rbar = False
 
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
@@ -660,7 +717,7 @@ def main(args):
             )
         else:
             if args.optim_alg is None or args.optim_alg in ['adamw']:
-                if args.dog_granularity != 'param':
+                if not hasattr(args, "dog_granularity") or  args.dog_granularity != 'param':
                     optimizer = optim.AdamW(
                         [
                             {"params": no_decay_params, "weight_decay": 0.0},
@@ -699,13 +756,14 @@ def main(args):
                         decay_to_init=args.dog_decay_to_init,
                         decouple_decay=args.decouple_decay,
                         decay_factor=args.decay_factor,
-                        eps=args.eps,)
+                        eps=args.eps,
+                        max_rbar=args.max_rbar,
+                        normalize_rbar=args.normalize_rbar)
             elif args.optim_alg in ['accele_dog']:
                 if args.dog_granularity != 'all':
-                    params = [{'params': [p]} for p in params]
+                    params = [{'params': [p], 'reps_rel': (args.dog_init_dist_rel if not p.to_normalize else args.dog_init_dist_rel_normalize) } for p in params]
                 optimizer = AcceleDoG(params, lr=args.lr,
                         #alpha_const=args.alpha_const,
-                        reps_rel=args.dog_init_dist_rel,
                         #init_eta=args.dog_init_eta if args.dog_init_eta > 0 else None,
                         granularity=args.dog_granularity,
                         weight_decay=args.wd,
@@ -713,10 +771,12 @@ def main(args):
                         #opt_ver=args.opt_ver,
                         #alpha_ver=args.alpha_ver,
                         #step_size_ver=args.step_size_ver,
-                        momentum=args.momentum,
+                        momentum=args.momentum if hasattr(args, "momentum") else 1.,
                         decouple_decay=args.decouple_decay,
                         decay_factor=args.decay_factor,
-                        eps=args.eps,)
+                        eps=args.eps,
+                        max_rbar=args.max_rbar,
+                        normalize_rbar=args.normalize_rbar)
             elif args.optim_alg in ['dadaptadam']:
                 optimizer = LoggedDAdaptAdam(params, lr=args.lr,
                         betas=(args.beta1, args.beta2),
