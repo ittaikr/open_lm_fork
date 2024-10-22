@@ -1,3 +1,4 @@
+import atexit
 import glob
 import logging
 import os
@@ -52,6 +53,7 @@ from .logger import setup_logging
 from .params import parse_args
 from .scheduler import cosine_lr, const_lr, const_lr_cooldown, hybrid_cosine_rsqrt, hybrid_cosine_rsqrt_cooldown, cosine_rewarmed_lr
 from .train import train_one_epoch, evaluate
+from open_lm.evaluate import evaluate_loop
 from .file_utils import (
     pt_load,
     check_exists,
@@ -59,6 +61,7 @@ from .file_utils import (
     remote_sync,
     get_string_for_epoch,
     log_num_checkpoints,
+    terminate_sync_process
 )
 
 from .utils.average_utils import ModelAverager
@@ -66,6 +69,7 @@ from .utils.average_utils import ModelAverager
 from dog import DoG
 from accele_dog import AcceleDoG
 from ladamw import LAdamW
+from adamw_test import AdamW_test
 
 from dadaptation import DAdaptAdam
 from prodigyopt import Prodigy
@@ -256,6 +260,7 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
         if completed_epoch == args.epochs or (
             args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0
         ):
+            logging.info(f'=> saving epoch {completed_epoch}')
             torch.save(
                 checkpoint_dict_model,
                 os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
@@ -264,6 +269,8 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
                 checkpoint_dict_opt,
                 os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
             )
+        else:
+            logging.info(f'=> Not saving epoch {completed_epoch}, bool=' + str(args.save_frequency > 0 and (completed_epoch % args.save_frequency)))
         if averagers is not None:
             for k in averagers.avgs_dict:
                 logging.info('=> saving averager for {}'.format(k))
@@ -303,6 +310,11 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
 
+def cleanup(sync_process, distributed=False):
+    if sync_process:
+        terminate_sync_process(sync_process)
+    if distributed and torch.distributed.is_initialized():
+        torch.distributed.destroy_process_group()
 
 def main(args):
     args = parse_args(args)
@@ -429,6 +441,8 @@ def main(args):
             args.remote_sync_protocol,
         )
         remote_sync_process.start()
+
+    atexit.register(cleanup, sync_process=remote_sync_process, distributed=args.distributed)
 
     if args.precision == "fp16":
         logging.warning(
@@ -608,7 +622,7 @@ def main(args):
 
         if True:
             if hasattr(args, "granularity_attentions") and args.granularity_attentions:
-                outputs = outputs + ["attention.in_proj.weight"]
+                outputs = outputs + ["attention.in_proj.weight", "attention.querie_proj.weight", "attention.key_proj.weight", "attention.value_proj.weight"]
                 inputs = inputs + ["attention.out_proj.weight"]
 
             if hasattr(args, "granularity_feed_forward") and args.granularity_feed_forward:
@@ -639,7 +653,8 @@ def main(args):
             for idx, (name, p) in enumerate(named_parameters):
                 if (('input' in normalized_weights and name.endswith("tok_embeddings.weight")) or
                     ('output' in normalized_weights and name.endswith("output.weight")) or
-                    ('attentions' in normalized_weights and name.endswith(("attention.in_proj.weight", "attention.out_proj.weight"))) or
+                    ('attentions' in normalized_weights and name.endswith(("attention.in_proj.weight", "attention.out_proj.weight",
+                                                        "attention.querie_proj.weight", "attention.key_proj.weight", "attention.value_proj.weight"))) or
                     ('feed_forward' in normalized_weights and name.endswith(("feed_forward.w12.weight", "feed_forward.w3.weight"))) or
                     ('all' in args.normalized_weights and name.endswith(".weight"))):
                     
@@ -663,6 +678,8 @@ def main(args):
         normalized_all = tuple(normalized_all)
 
         named_parameters = list(model.named_parameters())
+        if hasattr(args, "constant_weight_norm") and isinstance(args.constant_weight_norm,str):
+            args.constant_weight_norm = tuple(args.constant_weight_norm.split(','))
         for idx, (name, p) in enumerate(named_parameters):
             p.id_number = idx
             p.to_normalize = False
@@ -676,9 +693,25 @@ def main(args):
                     p.per_inout = 'output'
                     if hasattr(args, "granularity_per_param") and args.granularity_per_param:
                         p.per_inout = 'all'
+                elif hasattr(args, "granularity_norm") and args.granularity_norm and name.endswith(("norm.weight", "norm.bias")):
+                    p.per_inout = args.granularity_norm
+                    logging.info("granularity_norm for: " + name)
                 elif hasattr(args, "granularity_defualt") and args.granularity_defualt:
                     p.per_inout = args.granularity_defualt
                     logging.info("Defualt for: " + name)
+
+                if name.endswith("output.weight") or name.endswith("tok_embeddings.weight"):
+                    p.norm_type = 'output'
+
+                if hasattr(args, "granularity_per_head") and args.granularity_per_head:
+                    assert hasattr(args, 'split_attn_proj') and args.split_attn_proj
+                    if name.endswith(("attention.querie_proj.weight", "attention.key_proj.weight")):
+                        if args.distributed:
+                            p.num_of_heads = model.module.n_heads
+                        else:
+                            p.num_of_heads = model.n_heads
+                        logging.info(f"name: {name}, num_of_heads: {p.num_of_heads}")
+
 
             if hasattr(args, "normalized_weights") and args.normalized_weights:
                 if name.endswith(normalized_inputs):
@@ -688,6 +721,21 @@ def main(args):
                 elif name.endswith(normalized_all):
                     p.to_normalize = 'all'
 
+            if hasattr(args, "decay_skip_bias") and args.decay_skip_bias:
+                if name.endswith(".bias"):
+                    p.skip_decay = True
+
+            if hasattr(args, "constant_weight_norm") and args.constant_weight_norm:
+                if name.endswith(".bias"):
+                    pass
+                elif 'all' in args.constant_weight_norm:
+                    p.constant_norm = True
+                elif 'input' in args.constant_weight_norm and name.endswith("tok_embeddings.weight"):
+                    p.constant_norm = True
+                elif 'output' in args.constant_weight_norm and name.endswith("output.weight"):
+                    p.constant_norm = True
+                elif 'exclude_output' in args.constant_weight_norm and not name.endswith(outputs+normalized_outputs):
+                    p.constant_norm = True
 
         logging.info("")
         for n, p in named_parameters:
@@ -731,6 +779,8 @@ def main(args):
                     g_op = None
                     if hasattr(args, "ladamw_g_op"):
                         g_op = args.ladamw_g_op
+                    if not hasattr(args, "quantile"):
+                        args.quantile = None
                     optimizer = LAdamW(
                         [
                             {"params": no_decay_params, "weight_decay": 0.0},
@@ -740,43 +790,72 @@ def main(args):
                         betas=(args.beta1, args.beta2),
                         eps=args.eps,
                         g_op=g_op,
+                        quantile=args.quantile
                     )
-            elif args.optim_alg in ['dog']:
-                optimizer = DoG(params, lr=args.lr,
-                        #init_dist_abs=args.dog_init_dist_abs,
-                        init_dist_rel=args.dog_init_dist_rel,
-                        granularity=args.dog_granularity,
-                        weight_decay=args.wd,
-                        #phase_start_factor=args.dog_phase_start_factor,
-                        #theta_1=args.dog_theta_1,
-                        #theta_2=args.dog_theta_2,
-                        #discount_p=args.dog_discount_p,
-                        #proximal_reg=args.dog_proximal_reg,
-                        #safe_lr=args.dog_safe_lr,
-                        decay_to_init=args.dog_decay_to_init,
-                        decouple_decay=args.decouple_decay,
-                        decay_factor=args.decay_factor,
+            elif args.optim_alg in ['adamw_test']:
+                optimizer = AdamW_test(
+                        [
+                            {"params": no_decay_params, "weight_decay": 0.0},
+                            {"params": params, "weight_decay": args.wd},
+                        ],
+                        lr=args.lr,
+                        betas=(args.beta1, args.beta2),
                         eps=args.eps,
-                        max_rbar=args.max_rbar,
-                        normalize_rbar=args.normalize_rbar)
-            elif args.optim_alg in ['accele_dog']:
+                    )
+            elif args.optim_alg in ['dog', 'accele_dog']:
+                r_eps_name = 'reps_rel' if args.optim_alg == 'accele_dog' else 'init_dist_rel'
                 if args.dog_granularity != 'all':
-                    params = [{'params': [p], 'reps_rel': (args.dog_init_dist_rel if not p.to_normalize else args.dog_init_dist_rel_normalize) } for p in params]
-                optimizer = AcceleDoG(params, lr=args.lr,
-                        #alpha_const=args.alpha_const,
-                        #init_eta=args.dog_init_eta if args.dog_init_eta > 0 else None,
-                        granularity=args.dog_granularity,
-                        weight_decay=args.wd,
-                        decay_to_init=args.dog_decay_to_init,
-                        #opt_ver=args.opt_ver,
-                        #alpha_ver=args.alpha_ver,
-                        #step_size_ver=args.step_size_ver,
-                        momentum=args.momentum if hasattr(args, "momentum") else 1.,
-                        decouple_decay=args.decouple_decay,
-                        decay_factor=args.decay_factor,
-                        eps=args.eps,
-                        max_rbar=args.max_rbar,
-                        normalize_rbar=args.normalize_rbar)
+                    def get_param_reps(param, name):
+                        if p.to_normalize:
+                            return args.dog_init_dist_rel_normalize
+                        if name.endswith(".bias") and hasattr(args, "bias_init_dist_rel") and not (args.bias_init_dist_rel is None):
+                            return args.bias_init_dist_rel
+                        if name.endswith("tok_embeddings.weight") and hasattr(args, "embeddings_init_dist_rel") and not (args.embeddings_init_dist_rel is None):
+                            return args.embeddings_init_dist_rel
+                        if name.endswith("output.weight") and hasattr(args, "output_init_dist_rel") and not (args.output_init_dist_rel is None):
+                            return args.output_init_dist_rel
+                        return args.dog_init_dist_rel
+                    params = [{'params': [p], r_eps_name: get_param_reps(p,n) } for n,p in named_parameters if p.requires_grad]
+                else:
+                    params = [{'params': params, r_eps_name: args.dog_init_dist_rel }]
+                if args.optim_alg in ['dog']:
+                    optimizer = DoG(params, lr=args.lr,
+                            #init_dist_abs=args.dog_init_dist_abs,
+                            granularity=args.dog_granularity,
+                            weight_decay=args.wd,
+                            #phase_start_factor=args.dog_phase_start_factor,
+                            #theta_1=args.dog_theta_1,
+                            #theta_2=args.dog_theta_2,
+                            #discount_p=args.dog_discount_p,
+                            #proximal_reg=args.dog_proximal_reg,
+                            #safe_lr=args.dog_safe_lr,
+                            decay_to_init=args.dog_decay_to_init,
+                            decouple_decay=args.decouple_decay,
+                            decay_factor=args.decay_factor,
+                            eps=args.eps,
+                            max_rbar=args.max_rbar,
+                            normalize_rbar=args.normalize_rbar,
+                            moving_avg_init= args.moving_avg_init if hasattr(args, "moving_avg_init") else None)
+                elif args.optim_alg in ['accele_dog']:
+                    optimizer = AcceleDoG(params, lr=args.lr,
+                            #alpha_const=args.alpha_const,
+                            #init_eta=args.dog_init_eta if args.dog_init_eta > 0 else None,
+                            granularity=args.dog_granularity,
+                            weight_decay=args.wd,
+                            decay_to_init=args.dog_decay_to_init,
+                            #opt_ver=args.opt_ver,
+                            #alpha_ver=args.alpha_ver,
+                            #step_size_ver=args.step_size_ver,
+                            momentum=args.momentum if hasattr(args, "momentum") else 1.,
+                            decouple_decay=args.decouple_decay,
+                            decay_factor=args.decay_factor,
+                            eps=args.eps,
+                            max_rbar=args.max_rbar,
+                            normalize_rbar=args.normalize_rbar,
+                            always_project= args.always_project if hasattr(args, "always_project") else False,
+                            decay_to_norm = args.decay_to_norm if hasattr(args, "decay_to_norm") else False,
+                            decay_after = args.decay_after if hasattr(args, "decay_after") else False,
+                            always_decay = args.always_decay if hasattr(args, "always_decay") else False)
             elif args.optim_alg in ['dadaptadam']:
                 optimizer = LoggedDAdaptAdam(params, lr=args.lr,
                         betas=(args.beta1, args.beta2),
@@ -842,6 +921,10 @@ def main(args):
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
             cooldown_steps = (data["train"].dataloader.num_batches) * args.epochs_cooldown if args.epochs_cooldown is not None else None
+        if (not hasattr(args, "warmup_start")) or args.warmup_start is None:
+            args.warmup_start=0
+        if not hasattr(args, "gradient_scheduler"):
+            args.gradient_scheduler = False
         if args.schedulefree: # schedulefree, so no scheduler
             pass
         elif args.lr_scheduler == "cosine":
@@ -852,6 +935,8 @@ def main(args):
                 total_steps,
                 args.lr_cooldown_end,
                 args.force_min_lr,
+                warmup_start=args.warmup_start,
+                gradient_scheduler=args.gradient_scheduler
             )
         elif args.lr_scheduler == "cosine-target":
             scheduler = cosine_lr(
@@ -930,9 +1015,13 @@ def main(args):
         paths.append(csv_path_eval)
     csv_path_stats = os.path.join(args.logs, args.name, "stats_eval.csv")
     paths.append(csv_path_stats)
-    for path in paths:
-        if os.path.exists(path):
-            os.remove(path)
+    if is_master(args):
+        for path in paths:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except:
+                    pass
 
     if args.wandb and is_master(args):
         os.environ["WANDB_MODE"]="offline"
@@ -961,8 +1050,9 @@ def main(args):
             logging.info(f'=> evaluation avg {k}')
             model = averagers.avgs_dict[k].av_model
             
-        metrics["average"] = k if averagers is not None else 'last'
-        metrics = evaluate(model, data, start_epoch, args, writer, metrics["average"])
+        average_name = k if averagers is not None else 'last'
+        metrics = evaluate_loop(model, [data], start_epoch, args, writer, [average_name])[0] # evaluate(model, data, start_epoch, args, writer, metrics["average"])
+        metrics["average"] = average_name
         metrics["checkpoint_path"] = args.resume
         metrics["val_data"] = args.val_data
         metrics["model"] = args.model
@@ -972,6 +1062,7 @@ def main(args):
                 f.write(json.dumps(metrics))
                 f.write("\n")
 
+        cleanup(remote_sync_process, args.distributed)
         return
 
     loss = torch.nn.CrossEntropyLoss()
@@ -993,6 +1084,12 @@ def main(args):
             args.flops_to_save = args.flops_to_save.split(",")
             args.flops_to_save = np.array([float(flop) for flop in args.flops_to_save])
 
+    if hasattr(args, "reset_opt") and args.reset_opt:
+        assert hasattr(optimizer, "reset")
+        args.reset_opt = np.fromstring(args.reset_opt, np.int32, sep=",")
+    else:
+        args.reset_opt = []
+
     should_break = False
     epoch = start_epoch
     done_training = global_step >= total_steps
@@ -1000,6 +1097,9 @@ def main(args):
     while not done_training:
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
+
+        if epoch in args.reset_opt:
+            optimizer.reset()
 
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
@@ -1067,7 +1167,7 @@ def main(args):
         if "val" in data:
             metric_key = 'last'
 
-            metrics[metric_key] = evaluate(model, data, completed_epoch, args, writer, metric_key)
+            metrics[metric_key] = evaluate_loop(model, [data], completed_epoch, args, writer, [metric_key])[0] # evaluate(model, data, completed_epoch, args, writer, metric_key)
             metrics[metric_key]["val_data"] = args.val_data
             metrics[metric_key]["model"] = args.model
             metrics[metric_key]["average"] = 'last'
@@ -1082,7 +1182,7 @@ def main(args):
                     f.write(",".join([str(v) for v in metrics[metric_key].values()]) + "\n")
             if averagers is not None:
                 for k in averagers.avgs_dict.keys():
-                    metrics[k] = evaluate(averagers.avgs_dict[k].av_model, data, completed_epoch, args, writer, k)
+                    metrics[k] = evaluate_loop(averagers.avgs_dict[k].av_model, [data], completed_epoch, args, writer, [k])[0] # evaluate(averagers.avgs_dict[k].av_model, data, completed_epoch, args, writer, k)
                     metrics[k]["val_data"] = args.val_data
                     metrics[k]["model"] = args.model
                     metrics[k]["average"] = k
@@ -1095,6 +1195,8 @@ def main(args):
         joint_metrics = {}
         for k in train_metrics.keys():
             joint_metrics["train/" + k] = train_metrics[k]
+        if hasattr(args, "save_layers_norms") and args.save_layers_norms:
+            joint_metrics["train/layers_norms"] = np.array([p.norm().item() for n, p in named_parameters if p.requires_grad])
         for averager in metrics.keys():
             for k in metrics[averager].keys():
                 joint_metrics["test/" + averager + '/' + k] = metrics[averager][k]
@@ -1105,17 +1207,21 @@ def main(args):
         for k in epoch_keys:
             joint_metrics.pop(k)
 
-        csv_path_stats = os.path.join(args.logs, args.name, "stats_eval.csv")
-        with open(csv_path_stats, "a") as f:
-            if epoch == 1:
-                f.write("," + ",".join(joint_metrics.keys()) + "\n")
-            f.write(str(epoch) + "," +  ",".join([str(joint_metrics[k]) for k in joint_metrics.keys()]) + "\n")
+        if is_master(args):
+            csv_path_stats = os.path.join(args.logs, args.name, "stats_eval.csv")
+            with open(csv_path_stats, "a") as f:
+                if epoch == 1:
+                    f.write("," + ",".join(joint_metrics.keys()) + "\n")
+                f.write(str(epoch) + "," +  ",".join([str(joint_metrics[k]) for k in joint_metrics.keys()]) + "\n")
 
         if args.max_tokens is not None:
             tokens_seen = samples_seen * args.seq_len
             if tokens_seen >= args.max_tokens:
                 should_break = True
                 logging.info(f"Reached max tokens {args.max_tokens}, stopping training.")
+        if np.isnan(train_metrics["loss"]):
+            should_break = True
+            logging.info(f"Train loss is {train_metrics['loss']}, stopping training.")
         if should_break:
             break
 
@@ -1146,7 +1252,7 @@ def main(args):
     # run a final sync.
     if remote_sync_process is not None:
         logging.info("Final remote sync.")
-        remote_sync_process.terminate()
+        terminate_sync_process(remote_sync_process)
         result = remote_sync(
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
@@ -1156,6 +1262,12 @@ def main(args):
             logging.info("Final remote sync successful.")
         else:
             logging.info("Final remote sync failed.")
+
+    # Final sync of all procs.
+    if args.distributed:
+        dist.barrier()
+
+    cleanup(remote_sync_process, args.distributed)
 
 
 def copy_codebase(args):

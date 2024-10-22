@@ -1,0 +1,131 @@
+job_details:
+  name: openwebtext_adog_save_layers10_1e-5
+  num_gpus: 1
+  num_nodes: 1
+  output_dir: results
+parameters:
+  LIST_MODEL_WARMUP_TOKENS:
+  - max_tokens:
+    - 2069299200
+    model:
+    - layers=10_hidden-dim=384
+  LIST_OF_BATCHES:
+  - accum_freq:
+    - 16
+    batch_size:
+    - 64
+    val_freq:
+    - 4
+  LIST_OF_OPTIM:
+  - beta1:
+    - 1.0
+    beta2:
+    - 1.0
+    bias_init_dist_rel:
+    - null
+    decoupled_wd:
+    - 0.0
+    dog_decay_to_init:
+    - false
+    dog_init_dist_rel:
+    - 0.00001
+    embeddings_init_dist_rel:
+    - 2.0
+    ladamw_g_op:
+    - avg
+    lr:
+    - 1.0
+    lr_scheduler:
+    - const
+    moving_avg_init:
+    - null
+    optim_alg:
+    - accele_dog
+    output_init_dist_rel:
+    - 0.001
+    warmup_tokens: eval("[ 0 ]")
+  LIST_OF_RBARS:
+  - granularity_per_param:
+    - false
+    normalize_rbar:
+    - false
+  always_project:
+  - true
+  averagers:
+  - poly_8_1
+  constant_weight_norm:
+  - input,output
+  csv_log:
+  - true
+  data_key:
+  - json.gz
+  dataset_manifest:
+  - data/openwebtext2_tokenized/manifest.jsonl
+  dataset_resampled:
+  - false
+  decay_factor:
+  - 1.0
+  decouple_decay:
+  - true
+  delete_previous_checkpoint:
+  - true
+  dog_granularity:
+  - param
+  epochs:
+  - 10
+  eps:
+  - 1.0e-08
+  fake_grad_clip_norm:
+  - 1
+  grad_checkpointing:
+  - true
+  grad_clip_norm:
+  - 1
+  granularity_attentions:
+  - false
+  granularity_feed_forward:
+  - false
+  granularity_norm:
+  - false
+  granularity_per_head:
+  - true
+  granularity_per_token:
+  - true
+  keep_freq:
+  - 5
+  log_every_n_steps:
+  - 20
+  lr_cooldown_end:
+  - 3.0e-05
+  max_rbar:
+  - false
+  precision:
+  - float16
+  qk_norm:
+  - true
+  report_to:
+  - ''
+  resume:
+  - latest
+  save_checkpoint:
+  - true
+  save_frequency:
+  - 1
+  save_grads_norms:
+  - true
+  save_layers_norms:
+  - true
+  split_attn_proj:
+  - true
+  train_num_samples:
+  - 10000000
+  val_data:
+  - data/openwebtext2_tokenized/00000026.tar
+  val_num_samples:
+  - 2000
+  wandb_project_name:
+  - null
+  workers:
+  - 4
+  z_loss_coefficient:
+  - 0.0001

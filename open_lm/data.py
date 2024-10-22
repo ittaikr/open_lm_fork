@@ -477,6 +477,11 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             num_workers_per_gpu = max(1, args.workers)
             num_worker_batches = round_fn(all_num_samples[ii] / (global_batch_size * num_workers_per_gpu))
 
+            if all_num_samples[ii] % (global_batch_size * num_workers_per_gpu) != 0:
+                num_worker_batches_float = all_num_samples[ii] / (global_batch_size * num_workers_per_gpu)
+                all_num_samples_ii = all_num_samples[ii]
+                logging.warning(f"num_worker_batches_float={num_worker_batches_float}, all_num_samples_ii={all_num_samples_ii}, global_batch_size={global_batch_size}, num_workers_per_gpu={num_workers_per_gpu}")
+
             if num_worker_batches == 0:
                 raise ValueError(
                     f"The dataloader for source {ii} has received zero batches. This can happen due to rounding if "

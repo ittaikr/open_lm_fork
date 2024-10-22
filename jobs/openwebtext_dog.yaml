@@ -1,5 +1,5 @@
 job_details:
-  name: openwebtext_a-dog_momentum_granularity_no_output_embed-norm
+  name: openwebtext_dog_rbar_a-dog
   output_dir: results
   num_gpus: 1
   num_nodes: 1
@@ -7,7 +7,7 @@ parameters:
     save_checkpoint: [false]
     LIST_MODEL_WARMUP_TOKENS:
 
-      - model: ['layers=6_hidden-dim=224_post-embed-norm=true']
+      - model: ['layers=6_hidden-dim=224']
         max_tokens: [2069299200] 
       
     warmup: [0]
@@ -18,30 +18,30 @@ parameters:
     dataset_resampled: [false]
     precision: ['float16']
     LIST_OF_BATCHES:
-      - batch_size: [1]
-        accum_freq: [1]
-        val_freq: [1]
-      - batch_size: [4] # global batch size is 16*4=64
-        accum_freq: [1]
-        val_freq: [1]
+      # - batch_size: [1]
+      #   accum_freq: [1]
+      #   val_freq: [1]
+      # - batch_size: [4] # global batch size is 16*4=64
+      #   accum_freq: [1]
+      #   val_freq: [1]
       - batch_size: [16]
         accum_freq: [4]
         val_freq: [1]
-      - batch_size: [64]
-        accum_freq: [16]
-        val_freq: [4]
-      - batch_size: [2]
-        accum_freq: [1]
-        val_freq: [1]
-      - batch_size: [8]
-        accum_freq: [2]
-        val_freq: [1]
-      - batch_size: [32]
-        accum_freq: [8]
-        val_freq: [2]
-      - batch_size: [128]
-        accum_freq: [32]
-        val_freq: [8]
+      # - batch_size: [64]
+      #   accum_freq: [16]
+      #   val_freq: [4]
+      # - batch_size: [2]
+      #   accum_freq: [1]
+      #   val_freq: [1]
+      # - batch_size: [8]
+      #   accum_freq: [2]
+      #   val_freq: [1]
+      # - batch_size: [32]
+      #   accum_freq: [8]
+      #   val_freq: [2]
+      # - batch_size: [128]
+      #   accum_freq: [32]
+      #   val_freq: [8]
     grad_checkpointing: [true]
     log_every_n_steps: [20]
     csv_log: [true]
@@ -55,26 +55,49 @@ parameters:
     qk_norm: [true]
     z_loss_coefficient: [0.0001]
     lr_scheduler: ['const']
-    wd: [0.0001] # [0.00001, 0.0000033, 0] # 
+    wd: [0] # [0.00001, 0.0000033, 0] # 
     lr: [1.0]
     epochs: [50]
-    wandb_project_name: ['openwebtext_a-dog_momentum_granularity_no_output_embed-norm']
+    wandb_project_name: ['openwebtext_dog_rbar_adog_perparam']
     delete_previous_checkpoint: [true]
     workers: [4]
     dataset_manifest: ["data/openwebtext2_tokenized/manifest_train.jsonl"]
     val_data: ["data/openwebtext2_tokenized/00000026.tar"]
     averagers: ['poly_32_1,poly_8_1']
     optim_alg: ['accele_dog'] # ['dog'] # 
-    dog_granularity: ['param'] # ['all', 'param'] # 
+    dog_granularity: ['param'] # ['all', 'param'] #
+    # LIST_OF_GRANULARITIES:
+    #   - granularity_per_token: [true,false]
+    #     #granularity_attentions: [false,true] # [false] # 
+    #     #granularity_feed_forward: [false,true] # [false] #
+    #     #granularity_reverse: [false,true] # [false] # 
+    #     granularity_output: [True]
+    #     granularity_input: [True]
+    #   - granularity_per_token: [false]
+    #     #granularity_attentions: [false,true] # [false] # 
+    #     #granularity_feed_forward: [false,true] # [false] #
+    #     #granularity_reverse: [false,true] # [false] # 
+    #     granularity_output: [false]
+    #     granularity_input: [false]
     granularity_per_token: [true]
-    #granularity_attentions: [false,true] # [false] # 
-    #granularity_feed_forward: [false,true] # [false] #
-    #granularity_reverse: [false,true] # [false] # 
-    granularity_output: [false]
-    dog_init_dist_rel: [1.0e-06]
+    granularity_per_param: [true,false]
+    granularity_norm: ['all', false]
+    LIST_OF_GRANULARITIES:
+      - granularity_attentions: [true]
+        granularity_feed_forward: [true]
+      - granularity_attentions: [false]
+        granularity_feed_forward: [false]
+    dog_init_dist_rel: [1.0e-06, 1.0e-04]
+    normalized_weights: [false] # ['all'] # ['input,output', 'all']
+    dog_init_dist_rel_normalize: [1.0e-02] # [1.0]
     dog_decay_to_init: [true]
     decouple_decay: [true]
     decay_factor: [1.0]
-    momentum: eval("[1 - 0.1**(i/2) for i in range(11) ] + [1.0]")
+    LIST_OF_RBARS:
+      - max_rbar: [false]
+        normalize_rbar: [true]
+      - max_rbar: [true, false]
+        normalize_rbar: [false]
+    #momentum: eval("[1 - 0.1**(i/2) for i in range(11) ] + [1.0]")
     # if there are 600B tokens in RW, and all of them are uniformly distributed in the shards, then each shard has 600B/42512 = 14.1M tokens
     # so, keeping 1000 shards for validation, we have 1000*14.1M = 14.1B tokens for validation

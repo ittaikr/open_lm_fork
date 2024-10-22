@@ -73,7 +73,7 @@ def log_model(args, step, i, has_data):
 def train_one_epoch(
     model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, averagers, args, tb_writer=None, csv_path=None
 ):
-    
+    start_step = step
     # for saving checkpoints based on flops
 
     device = torch.device(args.device)
@@ -107,6 +107,7 @@ def train_one_epoch(
     data_time_m_ret = AverageMeter()
     grad_norm = AverageMeter()
     grad_norm_ret = AverageMeter()
+    grads_norms_ret = AverageMeter()
     grad_clipped = 0
     grad_clipped_ret = 0
 
@@ -143,6 +144,10 @@ def train_one_epoch(
         else:
             has_data = has_data.item()
 
+        if i==1:
+            batch_size = len(inputs)
+            logging.info(f'batch_size: {batch_size}')
+
         # start of logging
         if is_master(args) and log_model(args, step, i, has_data):
             batch_size = len(inputs)
@@ -168,7 +173,7 @@ def train_one_epoch(
                 "samples_per_second": samples_per_second,
                 "samples_per_second_per_gpu": samples_per_second_per_gpu,
                 "lr": optimizer.param_groups[0]["lr"],
-                "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+                "tokens": (step) * args.batch_size * args.seq_len * args.world_size,
                 "grad_clipped": grad_clipped,
                 "grad_norm": grad_norm.avg,
             }
@@ -355,6 +360,8 @@ def train_one_epoch(
             grad_clip_norm = torch.stack([p.grad.norm() for p in model.parameters() if p.grad is not None]).norm()
         grad_norm.update(grad_clip_norm.item())
         grad_norm_ret.update(grad_clip_norm.item())
+        if hasattr(args, "save_grads_norms") and args.save_grads_norms:
+            grads_norms_ret.update( np.array([p.grad.norm().item() for p in model.parameters() if p.requires_grad]) )
 
         if grad_clip_norm >= (args.fake_grad_clip_norm if args.grad_clip_norm is None else args.grad_clip_norm):
             grad_clipped += 1
@@ -431,7 +438,7 @@ def train_one_epoch(
         #         "samples_per_second": samples_per_second,
         #         "samples_per_second_per_gpu": samples_per_second_per_gpu,
         #         "lr": optimizer.param_groups[0]["lr"],
-        #         "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+        #         "tokens": (step) * args.batch_size * args.seq_len * args.world_size,
         #     }
         #     if args.z_loss_coefficient != 0.0:
         #         log_data["z_loss"] = z_losses_m.avg
@@ -483,10 +490,12 @@ def train_one_epoch(
             "data_time": data_time_m_ret.avg,
             "time": batch_time_m_ret.avg,
             "learning_rate": optimizer.param_groups[0]["lr"],
-            "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+            "tokens": (step) * args.batch_size * args.seq_len * args.world_size,
             "grad_clipped": grad_clipped_ret,
             "grad_norm": grad_norm_ret.avg,
         }
+    if hasattr(args, "save_grads_norms") and args.save_grads_norms:
+        log_data['grads_norms'] = grads_norms_ret.avg
 
     if hasattr(optimizer, 'get_stats'):
         log_data.update(optimizer.get_stats())
@@ -530,6 +539,10 @@ def evaluate(model, data, start_epoch, args, writer, average=None):
         texts = torch.LongTensor(texts).to(device)
 
         data_time_m.update(time.time() - end)
+
+        if i==0:
+            batch_size = len(texts)
+            logging.info(f'batch_size: {batch_size}')
 
         batch_size = len(texts) // args.val_freq
         for ii in range(args.val_freq):
@@ -589,5 +602,8 @@ def evaluate(model, data, start_epoch, args, writer, average=None):
             assert wandb is not None, "Please install wandb."
             wandb.log({name: val, "epoch": start_epoch, "tokens": log_data["tokens"]})
     if is_master(args):
-        print(f"evaluation perplexity: {math.exp(losses_m.avg)}")
+        try:
+            print(f"evaluation perplexity: {math.exp(losses_m.avg)}")
+        except:
+            print(f"evaluation perplexity is too heigh")
     return metrics

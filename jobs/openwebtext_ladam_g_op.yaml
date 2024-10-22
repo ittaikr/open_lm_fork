@@ -1,5 +1,5 @@
 job_details:
-  name: openwebtext_ladam_per_param_adam_fixed_batch16_2
+  name: openwebtext_ladam_g_op_lr_scheduler_const
   output_dir: results
   num_gpus: 1
   num_nodes: 1
@@ -57,11 +57,11 @@ parameters:
     lr_cooldown_end: [3.0e-05] # in the rpj config it was like that, so I keep it
     qk_norm: [true]
     z_loss_coefficient: [0.0001]
-    lr_scheduler: ['cosine']
+    lr_scheduler: ['const'] # ['cosine']
     decoupled_wd: [0.0001]
     lr: [3.16e-00,3.16e-01, 3.16e-02, 3.16e-03, 3.16e-04, 3.16e-05, 1.0e+01, 1.0e-00, 1.0e-01, 1.0e-02, 1.0e-03]
     epochs: [50]
-    wandb_project_name: ['openwebtext_ladam_per_param_adam_fixed_batch']
+    wandb_project_name: ['openwebtext_ladam_g_op']
     delete_previous_checkpoint: [true]
     workers: [4]
     dataset_manifest: ["data/openwebtext2_tokenized/manifest_train.jsonl"]
@@ -69,14 +69,19 @@ parameters:
     averagers: ['poly_8_1']
     optim_alg: ['adamw']
     dog_granularity: ['param']
-    granularity_norm: ['all', false]
+    granularity_norm: [false]
     granularity_per_token: [true] # [false] # 
-    granularity_per_param: [false] # [true] # 
-    LIST_OF_GRANULARITIES:
-      - granularity_attentions: [true]
-        granularity_feed_forward: [true]
-      - granularity_attentions: [false]
-        granularity_feed_forward: [false]
-    ladamw_g_op: ['max', 'avg']
+    granularity_per_param: [true] # [false] # 
+    granularity_attentions: [false] # [true]
+    granularity_feed_forward: [false] # [true]
+    split_attn_proj: [true]
+    granularity_per_head: [true]
+    LIST_OF_G_OP:
+      - ladamw_g_op: ['avg']
+        quantile: [null]
+      - ladamw_g_op: ['max', 'max_tag', 'max_m', 'max_g']
+        quantile: [null, 0.9]
+        
+    
     # if there are 600B tokens in RW, and all of them are uniformly distributed in the shards, then each shard has 600B/42512 = 14.1M tokens
     # so, keeping 1000 shards for validation, we have 1000*14.1M = 14.1B tokens for validation

@@ -15,6 +15,8 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 
+import logging
+
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
 _MODEL_CONFIGS = {}  # directory (model_name: config) of model architecture configs
@@ -75,11 +77,19 @@ def xformers_attn(queries, keys, values, is_causal):
 
 
 class CustomAttn(nn.Module):
-    def __init__(self, layer_id, args: Params):
+    def __init__(self, layer_id, args: Params, split_proj = False):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+
+        self.split_proj = split_proj
+        if self.split_proj:
+            self.querie_proj = nn.Linear(args.dim, args.n_heads * self.head_dim, bias=False)
+            self.key_proj = nn.Linear(args.dim, args.n_heads * self.head_dim, bias=False)
+            self.value_proj = nn.Linear(args.dim, args.n_heads * self.head_dim, bias=False)
+        else:
+            self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = HeadRotaryWithCast(self.head_dim, args.seq_len) if args.rotary_old else RotaryWithCast(self.head_dim, args.seq_len)
         self.attn_fn = xformers_attn
@@ -87,7 +97,12 @@ class CustomAttn(nn.Module):
 
         # initialize weights by trunc_normal(1/sqrt(fan_in))
         std = 1.0 / math.sqrt(args.dim)
-        torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
+        if self.split_proj:
+            torch.nn.init.trunc_normal_(self.querie_proj.weight, std=std, a=-3 * std, b=3 * std)
+            torch.nn.init.trunc_normal_(self.key_proj.weight, std=std, a=-3 * std, b=3 * std)
+            torch.nn.init.trunc_normal_(self.value_proj.weight, std=std, a=-3 * std, b=3 * std)
+        else:
+            torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
         # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
         std = std / math.sqrt(2 * (layer_id + 1))
         torch.nn.init.trunc_normal_(
@@ -114,7 +129,13 @@ class CustomAttn(nn.Module):
 
     def forward(self, x: torch.Tensor, is_causal=True):
         batchsize, seqlen, _ = x.shape
-        queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
+
+        if self.split_proj:
+            queries = self.querie_proj(x)
+            keys = self.key_proj(x)
+            vals = self.value_proj(x)
+        else:
+            queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
 
         queries = self.q_norm(queries)
         keys = self.k_norm(keys)
@@ -133,12 +154,12 @@ class CustomAttn(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, layer_id, args: Params):
+    def __init__(self, layer_id, args: Params, split_attn_proj=False):
         super().__init__()
         self.n_heads = args.n_heads
         self.dim = args.dim
         self.head_dim = args.dim // args.n_heads
-        self.attention = CustomAttn(layer_id, args)
+        self.attention = CustomAttn(layer_id, args, split_proj=split_attn_proj)
 
         # this follows llama / lit llama -- go to multiple of 256
         hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
@@ -174,9 +195,10 @@ class Block(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, params):
+    def __init__(self, params, split_attn_proj=False):
         super().__init__()
         # for convenience we often share param names with llama
+        self.n_heads = params.n_heads
         self.params = params
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
@@ -195,7 +217,7 @@ class Transformer(nn.Module):
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.n_layers):
-            self.layers.append(Block(layer_id, params))
+            self.layers.append(Block(layer_id, params, split_attn_proj=split_attn_proj))
 
         # get class for normalization layers
         self.norm = params.norm_type(
@@ -243,6 +265,7 @@ class Transformer(nn.Module):
 
 
 def create_model(args):
+    split_attn_proj = args.split_attn_proj if hasattr(args, 'split_attn_proj') else False
     cfg = deepcopy(_MODEL_CONFIGS[args.model])
     args = Params(
         dim=cfg["hidden_dim"],
@@ -256,4 +279,4 @@ def create_model(args):
         apply_qk_norm=args.qk_norm,
         rotary_old=args.rotary_old
     )
-    return Transformer(args)
+    return Transformer(args, split_attn_proj = split_attn_proj)

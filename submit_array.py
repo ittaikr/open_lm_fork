@@ -28,9 +28,10 @@ class Slurm_Config:
     stderr_to_stdout: bool = True
     
     nodes: int = 1
+    gpus_per_node: int = None
     ntasks_per_node: int =1
     cpus_per_task: int = 2
-    gpus_per_task: int= 0
+    gpus_per_task: int= None
     mem: str = "8G"
 
     constraint: str = None
@@ -103,6 +104,8 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--rerun', action='store_true',
                         help='re-submits all jobs not marked as done; when used the jobfile argument should be the path '
                              'to the results folder of a previous execution of the script.')
+    parser.add_argument('-m', '--max_jobs', type=int, default=None,
+                        help='Constarint the number of jobs that can run at any single moment.')
     parser.add_argument('-l', '--jobs_limit', type=int, default=1000,
                         help='only submit jobs_limit jobs at a time.')
     parser.add_argument('-n', '--non_blocking', action='store_true',
@@ -162,7 +165,10 @@ if __name__ == '__main__':
 
                     item_id_arr = []
                     for r in item_id.split(','):
-                        start, end = r.split('-')
+                        if '-' in r:
+                            start, end = r.split('-')
+                        else:
+                            start = end = r
                         start, end = int(start), int(end)
                         item_id_arr.append( np.arange(start, end+1) )
                     item_id_arr = np.concatenate( item_id_arr )
@@ -220,6 +226,7 @@ if __name__ == '__main__':
                 continue
             if spec_filename.startswith("./") and spec_filename[2:] in running:
                 continue
+            print (spec_name)
             yield spec_name, spec_filename, out_dir
 
 
@@ -269,6 +276,9 @@ if __name__ == '__main__':
 
     executor = submitit.SlurmExecutor(folder=log_folder)
     executor.update_parameters(**asdict(slurm_config))
+
+    if not (args.max_jobs is None):
+        executor.update_parameters(array_parallelism=args.max_jobs)
 
     if args.dry_run:
         cmd = executor._submitit_command_str

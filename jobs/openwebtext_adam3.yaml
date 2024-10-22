@@ -1,0 +1,109 @@
+job_details:
+  name: openwebtext_adam_beta2_95_cosine_lr_fixed
+  output_dir: results
+  num_gpus: 4
+  num_nodes: 1
+parameters:
+    save_checkpoint: [false]
+    LIST_MODEL_WARMUP_TOKENS:
+
+      - model: ['layers=4_hidden-dim=128']
+        train_num_samples: eval("[2048 * 128 * 12]")
+        warmup_tokens: eval("[ 2048 * 128 * 12 * 5 ]") # eval("[ 0 ]") # 
+        workers: [4]
+      - model: ['layers=5_hidden-dim=160']
+        train_num_samples: eval("[2048 * 128 * 15]")
+        warmup_tokens: eval("[ 2048 * 128 * 15 * 5 ]") # 
+        workers: [5]
+      - model: ['layers=6_hidden-dim=224']
+        train_num_samples: eval("[2048 * 128 * 24]")
+        warmup_tokens: eval("[ 2048 * 128 * 24 * 5 ]") # 
+        workers: [4]
+      - model: ['layers=8_hidden-dim=288']
+        train_num_samples: eval("[2048 * 128 * 35]")
+        warmup_tokens: eval("[ 2048 * 128 * 35 * 5 ]") # 
+        workers: [5]
+      - model: ['layers=9_hidden-dim=320']
+        train_num_samples: eval("[2048 * 128 * 44]")
+        warmup_tokens: eval("[ 2048 * 128 * 44 * 5 ]") # 
+        workers: [4]
+      - model: ['layers=10_hidden-dim=384']
+        train_num_samples: eval("[2048 * 128 * 56]")
+        warmup_tokens: eval("[ 2048 * 128 * 56 * 5 ]") # 
+        workers: [4]
+      - model: ['layers=12_hidden-dim=480']
+        train_num_samples: eval("[2048 * 128 * 88]")
+        warmup_tokens: eval("[ 2048 * 128 * 88 * 5 ]") # 
+        workers: [4]
+      - model: ['layers=14_hidden-dim=576']
+        train_num_samples: eval("[2048 * 128 * 130]")
+        warmup_tokens: eval("[ 2048 * 128 * 130 * 5 ]") # 
+        workers: [5]
+      - model: ['layers=15_hidden-dim=640']
+        train_num_samples: eval("[2048 * 128 * 168]")
+        warmup_tokens: eval("[ 2048 * 128 * 168 * 5 ]") # 
+        workers: [4]
+      
+    val_num_samples: [8192]
+    # ~130B as in kaplan (note that we set 1000 epochs for avoiding repeating too much data in resuming),
+    # but we will never reach that - we will stop after 6 or 12 hours.
+    dataset_resampled: [false]
+    precision: ['float16']
+    LIST_OF_BATCHES:
+      # - batch_size: [1]
+      #   accum_freq: [1]
+      #   val_freq: [1]
+      # - batch_size: [4] # global batch size is 16*4=64
+      #   accum_freq: [1]
+      #   val_freq: [1]
+      # - batch_size: [16]
+      #   accum_freq: [4]
+      #   val_freq: [1]
+      # - batch_size: [64]
+      #   accum_freq: [16]
+      #   val_freq: [4]
+      # - batch_size: [2]
+      #   accum_freq: [1]
+      #   val_freq: [1]
+      # - batch_size: [8]
+      #   accum_freq: [2]
+      #   val_freq: [1]
+      - batch_size: [32]
+        accum_freq: [8]
+        val_freq: [2]
+      # - batch_size: [128]
+      #   accum_freq: [32]
+      #   val_freq: [8]
+    grad_checkpointing: [true]
+    log_every_n_steps: [20]
+    csv_log: [true]
+    grad_clip_norm: [1]
+    eps: [1.0e-08]
+    report_to: [''] # 
+    resume: ['latest']
+    data_key: ['json.gz']
+    lr_cooldown_end: [3.0e-05] # in the rpj config it was like that, so I keep it
+    qk_norm: [true]
+    z_loss_coefficient: [0.0001]
+    epochs: [50]
+    wandb_project_name: [null]
+    delete_previous_checkpoint: [true]
+    dataset_manifest: ["data/openwebtext2_tokenized/manifest_train_cleaned.jsonl"]
+    val_data: ["data/openwebtext2_tokenized/00000026.tar"]
+    averagers: ['poly_8_1,poly_32_1']
+    optim_alg: ['adamw']
+    ladamw_g_op: [null]
+    lr_scheduler: ['cosine'] # ['const'] # 
+    decoupled_wd: [0.0001]
+    lr: [3.16e-01, 3.16e-02, 3.16e-03,1.0e-01, 1.0e-02, 1.0e-03]
+    beta1: [0.9] # eval("[ 1 - 10**(-k/2) for k in range(0,7) ]")
+    beta2: [0.95]
+    dog_init_dist_rel: [null]
+    normalize_rbar: [null]
+    dog_decay_to_init: [null]
+    max_rbar: [false]
+    decouple_decay: [true]
+    decay_factor: [1.0]
+    dog_granularity: [null]
+    # if there are 600B tokens in RW, and all of them are uniformly distributed in the shards, then each shard has 600B/42512 = 14.1M tokens
+    # so, keeping 1000 shards for validation, we have 1000*14.1M = 14.1B tokens for validation
